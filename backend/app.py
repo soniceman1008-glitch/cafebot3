@@ -16,7 +16,7 @@ MENU_PATH = os.path.join(DATA_DIR, "menu.json")
 ORDERS_PATH = os.path.join(DATA_DIR, "orders.json")
 
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
-CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "chat_system.txt")
+CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "system-prompt.md")
 
 
 @app.get("/health")
