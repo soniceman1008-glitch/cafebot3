@@ -91,6 +91,21 @@ def chat():
     if not isinstance(message, str) or not message.strip():
         return jsonify(error="message is required"), 400
 
+    history = data.get("history", [])
+    if not isinstance(history, list):
+        return jsonify(error="history must be a list"), 400
+
+    messages = []
+    for entry in history:
+        if (
+            not isinstance(entry, dict)
+            or entry.get("role") not in ("user", "assistant")
+            or not isinstance(entry.get("content"), str)
+        ):
+            return jsonify(error="each history entry must have role (user or assistant) and content"), 400
+        messages.append({"role": entry["role"], "content": entry["content"]})
+    messages.append({"role": "user", "content": message})
+
     with open(CHAT_SYSTEM_PATH) as f:
         system_prompt = f.read()
 
@@ -99,7 +114,7 @@ def chat():
             model="claude-opus-5",
             max_tokens=1024,
             system=system_prompt,
-            messages=[{"role": "user", "content": message}],
+            messages=messages,
         )
     except anthropic.APIError:
         return jsonify(error="chat service unavailable"), 502

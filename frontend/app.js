@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let order = [];
   let placedOrders = [];
+  let chatHistory = [];
 
   function setOpen(open) {
     chatWindow.hidden = !open;
@@ -187,11 +188,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, history: chatHistory }),
       });
       if (!res.ok) throw new Error("chat request failed");
       const data = await res.json();
       appendMessage(data.reply, "bot");
+      chatHistory.push({ role: "user", content: text });
+      chatHistory.push({ role: "assistant", content: data.reply });
     } catch (err) {
       appendMessage("Sorry, I'm having trouble responding right now.", "bot");
     }
