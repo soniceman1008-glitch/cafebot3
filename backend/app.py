@@ -31,6 +31,7 @@ def _new_order_state():
         "order_type": None,
         "customer": {"name": None, "phone": None, "email": None},
         "pickup_time": None,
+        "delivery": {"address": None, "apartment": None, "instructions": None},
         "discount": None,
         "total": 0.0,
         "confirmed": False,
@@ -185,6 +186,29 @@ SET_PICKUP_DETAILS_TOOL = {
         "properties": {
             "customerName": {"type": "string", "description": "The customer's name for pickup."},
             "pickupTime": {"type": "string", "description": "Requested pickup time, if given, e.g. '3:30 PM' or 'in 20 minutes'. Optional."},
+        },
+        "additionalProperties": False,
+    },
+}
+
+SET_DELIVERY_DETAILS_TOOL = {
+    "name": "setDeliveryDetails",
+    "description": (
+        "Select delivery for the order and record the customer's name, phone number, and "
+        "full delivery address (all required before checkout), plus apartment/unit and "
+        "delivery instructions if applicable (both optional). Can be called with just one "
+        "field at a time as the customer provides it. Always reports back which required "
+        "fields are still missing, so you only ask for what's not already collected — never "
+        "guess a value or ask again for something the response shows is already set."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "customerName": {"type": "string", "description": "The customer's name for delivery."},
+            "phone": {"type": "string", "description": "The customer's phone number."},
+            "address": {"type": "string", "description": "Full delivery address (street, city, etc.)."},
+            "apartment": {"type": "string", "description": "Apartment/unit number, if applicable. Optional."},
+            "instructions": {"type": "string", "description": "Delivery instructions, e.g. gate code or where to leave it. Optional."},
         },
         "additionalProperties": False,
     },
@@ -429,6 +453,59 @@ def _set_pickup_details(session_id, tool_input):
     }
 
 
+def _set_delivery_details(session_id, tool_input):
+    order = get_session_order(session_id)
+    order["order_type"] = "delivery"
+
+    customer_name = tool_input.get("customerName")
+    if customer_name is not None:
+        if not isinstance(customer_name, str) or not customer_name.strip():
+            return {"error": "customerName must be a non-empty string"}
+        order["customer"]["name"] = customer_name.strip()
+
+    phone = tool_input.get("phone")
+    if phone is not None:
+        if not isinstance(phone, str) or not phone.strip():
+            return {"error": "phone must be a non-empty string"}
+        order["customer"]["phone"] = phone.strip()
+
+    address = tool_input.get("address")
+    if address is not None:
+        if not isinstance(address, str) or not address.strip():
+            return {"error": "address must be a non-empty string"}
+        order["delivery"]["address"] = address.strip()
+
+    apartment = tool_input.get("apartment")
+    if apartment is not None:
+        if not isinstance(apartment, str) or not apartment.strip():
+            return {"error": "apartment must be a non-empty string"}
+        order["delivery"]["apartment"] = apartment.strip()
+
+    instructions = tool_input.get("instructions")
+    if instructions is not None:
+        if not isinstance(instructions, str) or not instructions.strip():
+            return {"error": "instructions must be a non-empty string"}
+        order["delivery"]["instructions"] = instructions.strip()
+
+    missing = []
+    if not order["customer"]["name"]:
+        missing.append("customerName")
+    if not order["customer"]["phone"]:
+        missing.append("phone")
+    if not order["delivery"]["address"]:
+        missing.append("address")
+
+    return {
+        "order_type": order["order_type"],
+        "customer_name": order["customer"]["name"],
+        "phone": order["customer"]["phone"],
+        "address": order["delivery"]["address"],
+        "apartment": order["delivery"]["apartment"],
+        "instructions": order["delivery"]["instructions"],
+        "missing": missing,
+    }
+
+
 def _run_tool(name, tool_input, session_id):
     if name == "getMenu":
         return _get_active_menu()
@@ -446,6 +523,8 @@ def _run_tool(name, tool_input, session_id):
         return _apply_promotion(session_id, tool_input)
     if name == "setPickupDetails":
         return _set_pickup_details(session_id, tool_input)
+    if name == "setDeliveryDetails":
+        return _set_delivery_details(session_id, tool_input)
     return {"error": f"unknown tool: {name}"}
 
 
@@ -550,6 +629,7 @@ def chat():
         GET_RECOMMENDATIONS_TOOL,
         APPLY_PROMOTION_TOOL,
         SET_PICKUP_DETAILS_TOOL,
+        SET_DELIVERY_DETAILS_TOOL,
     ]
 
     try:
