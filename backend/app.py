@@ -19,6 +19,11 @@ PROMOTIONS_PATH = os.path.join(DATA_DIR, "promotions.json")
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "system-prompt.md")
 
+# Simple, fixed pricing configuration — flat tax rate, flat delivery fee for delivery
+# orders. Tax applies to the post-discount subtotal; the delivery fee itself is untaxed.
+TAX_RATE = 0.08
+DELIVERY_FEE = 3.00
+
 # In-memory session order state. Not persisted, not a database — resets on restart.
 # Each session's state: items (each with quantity/options), orderType, customer details,
 # discount, total, confirmed, and status.
@@ -33,6 +38,9 @@ def _new_order_state():
         "pickup_time": None,
         "delivery": {"address": None, "apartment": None, "instructions": None, "address_confirmed": False},
         "discount": None,
+        "subtotal": 0.0,
+        "tax": 0.0,
+        "delivery_fee": 0.0,
         "total": 0.0,
         "confirmed": False,
         "status": "in_progress",
@@ -43,6 +51,22 @@ def get_session_order(session_id):
     if session_id not in session_orders:
         session_orders[session_id] = _new_order_state()
     return session_orders[session_id]
+
+
+def _recompute_total(order):
+    """The single, deterministic source of truth for order pricing — never let the model
+    calculate or invent these figures itself."""
+    subtotal = round(sum(i["price"] * i["quantity"] for i in order["items"]), 2)
+    discount_amount = order["discount"]["amount"] if order["discount"] else 0.0
+    after_discount = max(round(subtotal - discount_amount, 2), 0.0)
+    tax = round(after_discount * TAX_RATE, 2)
+    delivery_fee = DELIVERY_FEE if order["order_type"] == "delivery" else 0.0
+
+    order["subtotal"] = subtotal
+    order["tax"] = tax
+    order["delivery_fee"] = delivery_fee
+    order["total"] = round(after_discount + tax + delivery_fee, 2)
+    return order
 
 
 # Tracks item names already recommended per session, so a suggestion is never repeated
@@ -223,6 +247,23 @@ SET_DELIVERY_DETAILS_TOOL = {
     },
 }
 
+GET_ORDER_TOTAL_TOOL = {
+    "name": "getOrderTotal",
+    "description": (
+        "Get the order's real, deterministically calculated cost breakdown: subtotal, "
+        "discount (if a promotion is applied), tax, delivery fee (delivery orders only), "
+        "and the final total. This is calculated from real menu prices and quantities — "
+        "never calculate, estimate, or state any of these figures yourself; always use "
+        "this tool (or the cart figures other tools return) and report exactly what it "
+        "gives you."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
+}
+
 
 def _get_active_menu():
     with open(MENU_PATH) as f:
@@ -284,7 +325,7 @@ def _add_item_to_cart(session_id, tool_input):
             "price": item["price"],
         }
     )
-    order["total"] = round(sum(i["price"] * i["quantity"] for i in order["items"]), 2)
+    _recompute_total(order)
 
     return {"added": {"name": name, "quantity": quantity, "option": option}, "cart": order}
 
@@ -324,7 +365,7 @@ def _modify_item(session_id, tool_input):
     if quantity is not None:
         cart_item["quantity"] = quantity
 
-    order["total"] = round(sum(i["price"] * i["quantity"] for i in order["items"]), 2)
+    _recompute_total(order)
 
     return {"modified": cart_item, "cart": order}
 
@@ -352,7 +393,7 @@ def _remove_item(session_id, tool_input):
         removed_quantity = quantity
         remaining_quantity = cart_item["quantity"]
 
-    order["total"] = round(sum(i["price"] * i["quantity"] for i in order["items"]), 2)
+    _recompute_total(order)
 
     return {
         "removed": {"name": name, "quantity": removed_quantity},
@@ -429,7 +470,7 @@ def _apply_promotion(session_id, tool_input):
         discount_amount = round(discount["value"], 2)
 
     order["discount"] = {"id": promo["id"], "name": promo["name"], "amount": discount_amount}
-    order["total"] = round(max(subtotal - discount_amount, 0), 2)
+    _recompute_total(order)
 
     return {"applied": order["discount"], "cart": order}
 
@@ -437,6 +478,7 @@ def _apply_promotion(session_id, tool_input):
 def _set_pickup_details(session_id, tool_input):
     order = get_session_order(session_id)
     order["order_type"] = "pickup"
+    _recompute_total(order)
 
     customer_name = tool_input.get("customerName")
     if customer_name is not None:
@@ -465,6 +507,7 @@ def _set_pickup_details(session_id, tool_input):
 def _set_delivery_details(session_id, tool_input):
     order = get_session_order(session_id)
     order["order_type"] = "delivery"
+    _recompute_total(order)
 
     customer_name = tool_input.get("customerName")
     if customer_name is not None:
@@ -526,6 +569,18 @@ def _set_delivery_details(session_id, tool_input):
     }
 
 
+def _get_order_total(session_id):
+    order = get_session_order(session_id)
+    _recompute_total(order)
+    return {
+        "subtotal": order["subtotal"],
+        "discount": order["discount"]["amount"] if order["discount"] else 0.0,
+        "tax": order["tax"],
+        "delivery_fee": order["delivery_fee"],
+        "total": order["total"],
+    }
+
+
 def _run_tool(name, tool_input, session_id):
     if name == "getMenu":
         return _get_active_menu()
@@ -545,6 +600,8 @@ def _run_tool(name, tool_input, session_id):
         return _set_pickup_details(session_id, tool_input)
     if name == "setDeliveryDetails":
         return _set_delivery_details(session_id, tool_input)
+    if name == "getOrderTotal":
+        return _get_order_total(session_id)
     return {"error": f"unknown tool: {name}"}
 
 
@@ -650,6 +707,7 @@ def chat():
         APPLY_PROMOTION_TOOL,
         SET_PICKUP_DETAILS_TOOL,
         SET_DELIVERY_DETAILS_TOOL,
+        GET_ORDER_TOTAL_TOOL,
     ]
 
     try:
