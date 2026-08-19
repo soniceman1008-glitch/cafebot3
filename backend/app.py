@@ -16,7 +16,134 @@ MENU_PATH = os.path.join(DATA_DIR, "menu.json")
 ORDERS_PATH = os.path.join(DATA_DIR, "orders.json")
 
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
-CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "chat_system.txt")
+CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "system-prompt.md")
+
+# In-memory session order state. Not persisted, not a database — resets on restart.
+# Each session's state: items (each with quantity/options), orderType, customer details,
+# discount, total, confirmed, and status.
+session_orders = {}
+
+
+def _new_order_state():
+    return {
+        "items": [],
+        "order_type": None,
+        "customer": {"name": None, "phone": None, "email": None},
+        "discount": None,
+        "total": 0.0,
+        "confirmed": False,
+        "status": "in_progress",
+    }
+
+
+def get_session_order(session_id):
+    if session_id not in session_orders:
+        session_orders[session_id] = _new_order_state()
+    return session_orders[session_id]
+
+
+GET_MENU_TOOL = {
+    "name": "getMenu",
+    "description": "Get the cafe's current menu, grouped by category. Only currently available items are included.",
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
+}
+
+ADD_ITEM_TOOL = {
+    "name": "addItemToCart",
+    "description": (
+        "Add a menu item to the customer's current order. Requires the exact item name "
+        "from the menu. If the item has options (like size) and none is given, the tool "
+        "reports which options are available instead of guessing — ask the customer and "
+        "call the tool again with their choice."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "Exact menu item name, e.g. 'Latte'."},
+            "quantity": {"type": "integer", "minimum": 1, "description": "How many to add. Defaults to 1."},
+            "option": {"type": "string", "description": "The customer's chosen size/option, if the item has options."},
+        },
+        "required": ["name"],
+        "additionalProperties": False,
+    },
+}
+
+
+def _get_active_menu():
+    with open(MENU_PATH) as f:
+        categories = json.load(f)
+    active = []
+    for cat in categories:
+        active_items = [item for item in cat["items"] if item.get("available", True)]
+        if active_items:
+            active.append({"category": cat["category"], "items": active_items})
+    return active
+
+
+def _find_menu_item(name):
+    with open(MENU_PATH) as f:
+        categories = json.load(f)
+    for cat in categories:
+        for item in cat["items"]:
+            if item["name"] == name:
+                return item
+    return None
+
+
+def _add_item_to_cart(session_id, tool_input):
+    name = tool_input.get("name")
+    quantity = tool_input.get("quantity", 1)
+    option = tool_input.get("option")
+
+    if not isinstance(name, str) or not name.strip():
+        return {"error": "name is required"}
+    if not isinstance(quantity, int) or quantity < 1:
+        return {"error": "quantity must be a positive integer"}
+
+    item = _find_menu_item(name)
+    if item is None:
+        return {"error": f"'{name}' is not a valid menu item"}
+    if not item.get("available", True):
+        return {"error": f"'{name}' is currently unavailable"}
+
+    options = item.get("options", [])
+    if options and not option:
+        return {
+            "error": "option_required",
+            "message": f"'{name}' requires an option to be chosen before it can be added.",
+            "available_options": options,
+        }
+    if options and option not in options:
+        return {
+            "error": "invalid_option",
+            "message": f"'{option}' is not a valid option for '{name}'.",
+            "available_options": options,
+        }
+
+    order = get_session_order(session_id)
+    order["items"].append(
+        {
+            "name": name,
+            "quantity": quantity,
+            "options": [option] if option else [],
+            "price": item["price"],
+        }
+    )
+    order["total"] = round(sum(i["price"] * i["quantity"] for i in order["items"]), 2)
+
+    return {"added": {"name": name, "quantity": quantity, "option": option}, "cart": order}
+
+
+def _run_tool(name, tool_input, session_id):
+    if name == "getMenu":
+        return _get_active_menu()
+    if name == "addItemToCart":
+        return _add_item_to_cart(session_id, tool_input)
+    return {"error": f"unknown tool: {name}"}
 
 
 @app.get("/health")
@@ -91,16 +218,58 @@ def chat():
     if not isinstance(message, str) or not message.strip():
         return jsonify(error="message is required"), 400
 
+    session_id = data.get("session_id") or "default"
+
+    history = data.get("history", [])
+    if not isinstance(history, list):
+        return jsonify(error="history must be a list"), 400
+
+    messages = []
+    for entry in history:
+        if (
+            not isinstance(entry, dict)
+            or entry.get("role") not in ("user", "assistant")
+            or not isinstance(entry.get("content"), str)
+        ):
+            return jsonify(error="each history entry must have role (user or assistant) and content"), 400
+        messages.append({"role": entry["role"], "content": entry["content"]})
+    messages.append({"role": "user", "content": message})
+
     with open(CHAT_SYSTEM_PATH) as f:
         system_prompt = f.read()
+
+    tools = [GET_MENU_TOOL, ADD_ITEM_TOOL]
 
     try:
         response = anthropic_client.messages.create(
             model="claude-opus-5",
             max_tokens=1024,
             system=system_prompt,
-            messages=[{"role": "user", "content": message}],
+            tools=tools,
+            messages=messages,
         )
+
+        while response.stop_reason == "tool_use":
+            tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
+            messages.append({"role": "assistant", "content": response.content})
+
+            tool_results = [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": json.dumps(_run_tool(block.name, block.input, session_id)),
+                }
+                for block in tool_use_blocks
+            ]
+            messages.append({"role": "user", "content": tool_results})
+
+            response = anthropic_client.messages.create(
+                model="claude-opus-5",
+                max_tokens=1024,
+                system=system_prompt,
+                tools=tools,
+                messages=messages,
+            )
     except anthropic.APIError:
         return jsonify(error="chat service unavailable"), 502
 
