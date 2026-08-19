@@ -18,6 +18,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let order = [];
   let placedOrders = [];
+  let chatHistory = [];
+  const MAX_HISTORY = 20;
 
   function setOpen(open) {
     chatWindow.hidden = !open;
@@ -182,17 +184,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
   allOrdersBtn.addEventListener("click", () => showAllOrders());
 
+  function showTyping() {
+    const bubble = document.createElement("div");
+    bubble.className = "chat-msg bot";
+    bubble.textContent = "CafeBot is typing…";
+    log.appendChild(bubble);
+    log.scrollTop = log.scrollHeight;
+    return bubble;
+  }
+
+  function hideTyping(bubble) {
+    if (bubble && bubble.parentNode) {
+      bubble.parentNode.removeChild(bubble);
+    }
+  }
+
   async function sendChat(text) {
+    const typingBubble = showTyping();
     try {
       const res = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, history: chatHistory }),
       });
       if (!res.ok) throw new Error("chat request failed");
       const data = await res.json();
+      hideTyping(typingBubble);
       appendMessage(data.reply, "bot");
+      chatHistory.push({ role: "user", content: text });
+      chatHistory.push({ role: "assistant", content: data.reply });
+      if (chatHistory.length > MAX_HISTORY) {
+        chatHistory = chatHistory.slice(-MAX_HISTORY);
+      }
     } catch (err) {
+      hideTyping(typingBubble);
       appendMessage("Sorry, I'm having trouble responding right now.", "bot");
     }
   }
