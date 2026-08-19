@@ -3,390 +3,214 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>CafeBot3 — Cafe Chat Assistant</title>
-<style>
-:root {
-  --brown-900: #3b2418;
-  --brown-700: #5c3a26;
-  --brown-500: #8a5a3c;
-  --cream-100: #fdf6ec;
-  --cream-200: #f5e9d8;
-  --accent: #c96f34;
-  --text: #2c1c12;
-  --white: #ffffff;
-  --radius: 14px;
-}
-
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: linear-gradient(180deg, var(--cream-200), var(--cream-100));
-  color: var(--text);
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.app {
-  width: 100%;
-  max-width: 420px;
-  background: var(--white);
-  border-radius: 20px;
-  box-shadow: 0 20px 50px rgba(59, 36, 24, 0.18);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  height: 640px;
-}
-
-.header {
-  background: linear-gradient(135deg, var(--brown-900), var(--brown-700));
-  color: var(--cream-100);
-  padding: 18px 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header .avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-}
-
-.header h1 { font-size: 16px; margin: 0; }
-.header p { font-size: 12px; margin: 2px 0 0; opacity: 0.8; }
-
-.chat-log {
-  flex: 1;
-  padding: 16px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: var(--cream-100);
-}
-
-.msg {
-  max-width: 78%;
-  padding: 10px 14px;
-  border-radius: var(--radius);
-  white-space: pre-wrap;
-  line-height: 1.4;
-  font-size: 14px;
-}
-
-.msg.user {
-  align-self: flex-end;
-  background: var(--accent);
-  color: var(--white);
-  border-bottom-right-radius: 4px;
-}
-
-.msg.bot {
-  align-self: flex-start;
-  background: var(--cream-200);
-  color: var(--text);
-  border-bottom-left-radius: 4px;
-}
-
-.msg.typing { opacity: 0.6; font-style: italic; }
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 16px;
-  background: var(--cream-100);
-  border-top: 1px solid var(--cream-200);
-}
-
-.chip {
-  border: 1px solid var(--brown-500);
-  color: var(--brown-700);
-  background: var(--white);
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.chip:hover { background: var(--cream-200); }
-
-.chat-form {
-  display: flex;
-  gap: 8px;
-  padding: 14px 16px;
-  background: var(--white);
-  border-top: 1px solid var(--cream-200);
-}
-
-.chat-form input {
-  flex: 1;
-  border: 1px solid #ddd;
-  border-radius: 999px;
-  padding: 10px 16px;
-  font-size: 14px;
-  outline: none;
-}
-
-.chat-form input:focus { border-color: var(--accent); }
-
-.chat-form button {
-  background: var(--accent);
-  color: var(--white);
-  border: none;
-  border-radius: 999px;
-  padding: 0 18px;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.chat-form button:hover { background: var(--brown-700); }
-</style>
+<title>Cafe Aroma — Freshly Brewed, Freshly Baked</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☕</text></svg>" />
+<link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app">
-    <div class="header">
-      <div class="avatar">☕</div>
-      <div>
-        <h1 data-cafe-name>Cafe</h1>
-        <p data-cafe-tagline>Welcome!</p>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="logo" href="#top">
+        <span class="logo-icon">☕</span>
+        <span class="logo-text">Cafe Aroma</span>
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="#about">About</a>
+        <a href="#menu">Menu</a>
+        <a href="#hours">Hours &amp; Location</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="container hero-inner">
+        <h1>Freshly brewed, freshly baked.</h1>
+        <p class="hero-subtitle">
+          Your neighborhood spot for handcrafted coffee, tea, and pastries —
+          made fresh every morning.
+        </p>
+        <a class="btn btn-primary" href="#menu">View Our Menu</a>
       </div>
+    </section>
+
+    <section id="about" class="about">
+      <div class="container about-inner">
+        <div class="about-text">
+          <h2>About Cafe Aroma</h2>
+          <p>
+            Cafe Aroma has been the neighborhood's favorite stop for coffee
+            and conversation. We roast, brew, and bake with care, using
+            quality ingredients and recipes we're proud of.
+          </p>
+          <p>
+            Whether you're grabbing a quick espresso on the way to work or
+            settling in with a pastry and a good book, we're here to make
+            your visit warm and welcoming.
+          </p>
+        </div>
+        <div class="about-visual" aria-hidden="true">☕</div>
+      </div>
+    </section>
+
+    <section id="menu" class="menu">
+      <div class="container">
+        <h2>Our Menu</h2>
+
+        <h3 class="menu-category">Coffee</h3>
+        <div class="menu-grid">
+          <article class="menu-card">
+            <div class="menu-card-top">
+              <h4>Espresso</h4>
+              <span class="price">$2.50</span>
+            </div>
+            <p>Rich double shot of espresso.</p>
+          </article>
+          <article class="menu-card">
+            <div class="menu-card-top">
+              <h4>Latte</h4>
+              <span class="price">$3.75</span>
+            </div>
+            <p>Espresso with steamed milk.</p>
+          </article>
+          <article class="menu-card">
+            <div class="menu-card-top">
+              <h4>Cappuccino</h4>
+              <span class="price">$3.75</span>
+            </div>
+            <p>Espresso, steamed milk, thick foam.</p>
+          </article>
+          <article class="menu-card">
+            <div class="menu-card-top">
+              <h4>Mocha</h4>
+              <span class="price">$4.25</span>
+            </div>
+            <p>Espresso, chocolate, steamed milk.</p>
+          </article>
+          <article class="menu-card">
+            <div class="menu-card-top">
+              <h4>Cold Brew</h4>
+              <span class="price">$4.00</span>
+            </div>
+            <p>Slow-steeped, smooth and bold.</p>
+          </article>
+        </div>
+
+        <h3 class="menu-category">Tea</h3>
+        <div class="menu-grid">
+          <article class="menu-card">
+            <div class="menu-card-top">
+              <h4>Green Tea</h4>
+              <span class="price">$2.75</span>
+            </div>
+            <p>Light and refreshing.</p>
+          </article>
+          <article class="menu-card">
+            <div class="menu-card-top">
+              <h4>Chai Latte</h4>
+              <span class="price">$3.50</span>
+            </div>
+            <p>Spiced tea with steamed milk.</p>
+          </article>
+        </div>
+
+        <h3 class="menu-category">Pastries</h3>
+        <div class="menu-grid">
+          <article class="menu-card">
+            <div class="menu-card-top">
+              <h4>Croissant</h4>
+              <span class="price">$3.00</span>
+            </div>
+            <p>Buttery, flaky, baked fresh daily.</p>
+          </article>
+          <article class="menu-card">
+            <div class="menu-card-top">
+              <h4>Blueberry Muffin</h4>
+              <span class="price">$3.25</span>
+            </div>
+            <p>Loaded with real blueberries.</p>
+          </article>
+          <article class="menu-card">
+            <div class="menu-card-top">
+              <h4>Chocolate Brownie</h4>
+              <span class="price">$3.50</span>
+            </div>
+            <p>Fudgy and rich.</p>
+          </article>
+        </div>
+
+        <h3 class="menu-category">Sandwiches</h3>
+        <div class="menu-grid">
+          <article class="menu-card">
+            <div class="menu-card-top">
+              <h4>Turkey &amp; Swiss</h4>
+              <span class="price">$6.50</span>
+            </div>
+            <p>On toasted sourdough.</p>
+          </article>
+          <article class="menu-card">
+            <div class="menu-card-top">
+              <h4>Veggie Panini</h4>
+              <span class="price">$6.00</span>
+            </div>
+            <p>Grilled vegetables and mozzarella.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="hours" class="hours">
+      <div class="container hours-inner">
+        <div class="hours-block">
+          <h2>Hours</h2>
+          <dl>
+            <div class="hours-row">
+              <dt>Mon – Fri</dt>
+              <dd>7:00 AM – 8:00 PM</dd>
+            </div>
+            <div class="hours-row">
+              <dt>Sat – Sun</dt>
+              <dd>8:00 AM – 9:00 PM</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="hours-block">
+          <h2>Location</h2>
+          <p>123 Main Street<br />Downtown</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer id="contact" class="site-footer">
+    <div class="container footer-inner">
+      <div>
+        <span class="logo-icon">☕</span>
+        <span class="logo-text">Cafe Aroma</span>
+      </div>
+      <p>123 Main Street, Downtown &middot; +1 (555) 123-4567</p>
+      <p>&copy; 2026 Cafe Aroma. All rights reserved.</p>
     </div>
+  </footer>
 
-    <div id="chat-log" class="chat-log"></div>
-
-    <div class="chips">
-      <button class="chip" data-chip="menu">Menu</button>
-      <button class="chip" data-chip="hours">Hours</button>
-      <button class="chip" data-chip="location">Location</button>
-      <button class="chip" data-chip="cart">My Cart</button>
+  <div class="chat-widget">
+    <div id="chat-window" class="chat-window" hidden>
+      <div class="chat-window-header">
+        <span class="chat-window-title"><span class="logo-icon">☕</span> CafeBot</span>
+        <button id="chat-close" class="chat-close" type="button" aria-label="Close chat">&times;</button>
+      </div>
+      <div id="chat-log" class="chat-log" aria-live="polite"></div>
+      <form id="chat-form" class="chat-form">
+        <input id="chat-input" type="text" placeholder="Ask CafeBot something..." autocomplete="off" />
+        <button type="submit">Send</button>
+      </form>
     </div>
-
-    <form id="chat-form" class="chat-form">
-      <input id="chat-input" type="text" placeholder="Ask about our menu, or say 'order a latte'..." autocomplete="off" />
-      <button type="submit">Send</button>
-    </form>
+    <button id="chat-toggle" class="chat-toggle" type="button" aria-label="Open chat" aria-expanded="false" aria-controls="chat-window">
+      💬
+    </button>
   </div>
 
-<script>
-// ---- menu.js: cafe info & menu data (edit this section to customize) ----
-const CAFE_INFO = {
-  name: "Cafe Aroma",
-  tagline: "Freshly brewed, freshly baked.",
-  hours: {
-    "Mon-Fri": "7:00 AM - 8:00 PM",
-    "Sat-Sun": "8:00 AM - 9:00 PM"
-  },
-  location: "123 Main Street, Downtown",
-  phone: "+1 (555) 123-4567",
-  wifi: {
-    network: "CafeAroma-Guest",
-    password: "coffeeholic"
-  }
-};
-
-const MENU = [
-  { id: "esp01", category: "Coffee", name: "Espresso", price: 2.5, desc: "Rich double shot of espresso." },
-  { id: "lat01", category: "Coffee", name: "Latte", price: 3.75, desc: "Espresso with steamed milk." },
-  { id: "cap01", category: "Coffee", name: "Cappuccino", price: 3.75, desc: "Espresso, steamed milk, thick foam." },
-  { id: "mch01", category: "Coffee", name: "Mocha", price: 4.25, desc: "Espresso, chocolate, steamed milk." },
-  { id: "cld01", category: "Coffee", name: "Cold Brew", price: 4.0, desc: "Slow-steeped, smooth and bold." },
-  { id: "tea01", category: "Tea", name: "Green Tea", price: 2.75, desc: "Light and refreshing." },
-  { id: "tea02", category: "Tea", name: "Chai Latte", price: 3.5, desc: "Spiced tea with steamed milk." },
-  { id: "pas01", category: "Pastries", name: "Croissant", price: 3.0, desc: "Buttery, flaky, baked fresh daily." },
-  { id: "pas02", category: "Pastries", name: "Blueberry Muffin", price: 3.25, desc: "Loaded with real blueberries." },
-  { id: "pas03", category: "Pastries", name: "Chocolate Brownie", price: 3.5, desc: "Fudgy and rich." },
-  { id: "san01", category: "Sandwiches", name: "Turkey & Swiss", price: 6.5, desc: "On toasted sourdough." },
-  { id: "san02", category: "Sandwiches", name: "Veggie Panini", price: 6.0, desc: "Grilled vegetables and mozzarella." }
-];
-
-// ---- bot.js: conversation engine ----
-const CafeBot = (function () {
-  const cart = [];
-
-  function money(n) { return "$" + n.toFixed(2); }
-
-  function findMenuItem(text) {
-    const t = text.toLowerCase();
-    return MENU.find(
-      (item) => t.includes(item.name.toLowerCase()) || t.includes(item.id.toLowerCase())
-    );
-  }
-
-  function categoryList() {
-    const cats = [...new Set(MENU.map((m) => m.category))];
-    return cats.join(", ");
-  }
-
-  function menuByCategory(category) {
-    const items = MENU.filter((m) => m.category.toLowerCase() === category.toLowerCase());
-    if (!items.length) return null;
-    return items.map((m) => `• ${m.name} — ${money(m.price)}`).join("\n");
-  }
-
-  function fullMenuText() {
-    const cats = [...new Set(MENU.map((m) => m.category))];
-    return cats.map((c) => `**${c}**\n${menuByCategory(c)}`).join("\n\n");
-  }
-
-  function cartText() {
-    if (!cart.length) return "Your cart is empty.";
-    const lines = cart.map((c) => `${c.qty} x ${c.name} — ${money(c.price * c.qty)}`);
-    const total = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
-    return lines.join("\n") + `\n\nTotal: ${money(total)}`;
-  }
-
-  function addToCart(item, qty) {
-    const existing = cart.find((c) => c.id === item.id);
-    if (existing) existing.qty += qty;
-    else cart.push({ id: item.id, name: item.name, price: item.price, qty });
-  }
-
-  function extractQty(text) {
-    const match = text.match(/(\d+)\s*x?/i);
-    if (match) {
-      const n = parseInt(match[1], 10);
-      if (n > 0 && n < 50) return n;
-    }
-    return 1;
-  }
-
-  function classify(text) {
-    const t = text.toLowerCase().trim();
-    if (/^(hi|hello|hey|salam|assalam)/.test(t)) return "greeting";
-    if (/(help|what can you do|options|commands)/.test(t)) return "help";
-    if (/(hour|open|close|timing)/.test(t)) return "hours";
-    if (/(where|location|address|directions)/.test(t)) return "location";
-    if (/(wifi|wi-fi|password|internet)/.test(t)) return "wifi";
-    if (/(phone|call|contact|number)/.test(t)) return "contact";
-    if (/(menu|what do you have|what's on offer|items)/.test(t)) return "menu";
-    if (/(cart|order summary|my order|review order)/.test(t)) return "cart";
-    if (/(checkout|place order|confirm order|submit order)/.test(t)) return "checkout";
-    if (/(clear cart|empty cart|start over|cancel order)/.test(t)) return "clear_cart";
-    if (/(add|order|get me|i want|i'll have|i would like)/.test(t) && findMenuItem(t)) return "add_item";
-    if (findMenuItem(t)) return "item_info";
-    if (/(thank|thanks|shukriya)/.test(t)) return "thanks";
-    if (/(bye|goodbye|see you)/.test(t)) return "goodbye";
-    return "fallback";
-  }
-
-  function respond(rawText) {
-    const text = rawText.trim();
-    if (!text) return "Say something and I'll do my best to help!";
-    const intent = classify(text);
-
-    switch (intent) {
-      case "greeting":
-        return `Hi there! Welcome to ${CAFE_INFO.name} 👋 ${CAFE_INFO.tagline}\nAsk me about our menu, hours, location, or say "order [item]" to start an order.`;
-      case "help":
-        return [
-          "Here's what I can help with:",
-          "• \"menu\" — see everything we offer",
-          "• \"order [item]\" — add something to your cart (e.g. \"order 2 lattes\")",
-          "• \"cart\" — review your order",
-          "• \"checkout\" — place your order",
-          "• \"hours\", \"location\", \"wifi\", \"contact\" — cafe info",
-        ].join("\n");
-      case "hours":
-        return `Our hours:\n${Object.entries(CAFE_INFO.hours).map(([d, h]) => `${d}: ${h}`).join("\n")}`;
-      case "location":
-        return `You can find us at ${CAFE_INFO.location}.`;
-      case "wifi":
-        return `Wi-Fi network: ${CAFE_INFO.wifi.network}\nPassword: ${CAFE_INFO.wifi.password}`;
-      case "contact":
-        return `You can reach us at ${CAFE_INFO.phone}.`;
-      case "menu":
-        return `Here's our menu (categories: ${categoryList()}):\n\n${fullMenuText()}`;
-      case "item_info": {
-        const item = findMenuItem(text);
-        return `${item.name} — ${money(item.price)}\n${item.desc}\nSay "order ${item.name}" to add it to your cart.`;
-      }
-      case "add_item": {
-        const item = findMenuItem(text);
-        const qty = extractQty(text);
-        addToCart(item, qty);
-        return `Added ${qty} x ${item.name} to your cart.\n\n${cartText()}`;
-      }
-      case "cart":
-        return cartText();
-      case "clear_cart":
-        cart.length = 0;
-        return "Your cart has been cleared.";
-      case "checkout": {
-        if (!cart.length) return "Your cart is empty — add something first!";
-        const summary = cartText();
-        cart.length = 0;
-        return `Order placed! Here's your receipt:\n\n${summary}\n\nThank you for choosing ${CAFE_INFO.name}! We'll have it ready shortly.`;
-      }
-      case "thanks":
-        return "You're very welcome! Anything else I can get for you?";
-      case "goodbye":
-        return `Thanks for stopping by ${CAFE_INFO.name}! See you soon ☕`;
-      default:
-        return `I didn't quite catch that. Try "menu", "hours", "order [item]", or "help" to see what I can do.`;
-    }
-  }
-
-  return { respond, getCart: () => cart.slice() };
-})();
-
-// ---- app.js: wires the bot to the UI ----
-document.addEventListener("DOMContentLoaded", () => {
-  const log = document.getElementById("chat-log");
-  const form = document.getElementById("chat-form");
-  const input = document.getElementById("chat-input");
-
-  document.querySelectorAll("[data-cafe-name]").forEach((el) => (el.textContent = CAFE_INFO.name));
-  document.querySelectorAll("[data-cafe-tagline]").forEach((el) => (el.textContent = CAFE_INFO.tagline));
-
-  function appendMessage(text, sender) {
-    const bubble = document.createElement("div");
-    bubble.className = `msg ${sender}`;
-    bubble.innerText = text;
-    log.appendChild(bubble);
-    log.scrollTop = log.scrollHeight;
-    return bubble;
-  }
-
-  function botReply(text) {
-    const typing = appendMessage("...", "bot typing");
-    setTimeout(() => {
-      typing.remove();
-      appendMessage(text, "bot");
-    }, 300 + Math.random() * 300);
-  }
-
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const text = input.value;
-    if (!text.trim()) return;
-    appendMessage(text, "user");
-    input.value = "";
-    botReply(CafeBot.respond(text));
-  });
-
-  document.querySelectorAll(".chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      const text = chip.dataset.chip;
-      appendMessage(text, "user");
-      botReply(CafeBot.respond(text));
-    });
-  });
-
-  botReply(CafeBot.respond("hello"));
-});
-</script>
+  <script src="app.js"></script>
 </body>
 </html>
