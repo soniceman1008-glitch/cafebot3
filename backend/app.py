@@ -73,6 +73,26 @@ ADD_ITEM_TOOL = {
 }
 
 
+MODIFY_ITEM_TOOL = {
+    "name": "modifyItem",
+    "description": (
+        "Adjust the quantity and/or size/option of an item already in the customer's "
+        "order. Requires the exact item name as it appears in the cart. Provide quantity "
+        "and/or option — whichever is changing."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "Exact name of the item already in the cart to modify."},
+            "quantity": {"type": "integer", "minimum": 1, "description": "New quantity for the item, if changing."},
+            "option": {"type": "string", "description": "New size/option for the item, if changing."},
+        },
+        "required": ["name"],
+        "additionalProperties": False,
+    },
+}
+
+
 def _get_active_menu():
     with open(MENU_PATH) as f:
         categories = json.load(f)
@@ -138,11 +158,53 @@ def _add_item_to_cart(session_id, tool_input):
     return {"added": {"name": name, "quantity": quantity, "option": option}, "cart": order}
 
 
+def _modify_item(session_id, tool_input):
+    name = tool_input.get("name")
+    quantity = tool_input.get("quantity")
+    option = tool_input.get("option")
+
+    if not isinstance(name, str) or not name.strip():
+        return {"error": "name is required"}
+    if quantity is None and option is None:
+        return {"error": "quantity and/or option is required to modify the item"}
+    if quantity is not None and (not isinstance(quantity, int) or quantity < 1):
+        return {"error": "quantity must be a positive integer"}
+
+    order = get_session_order(session_id)
+    cart_item = next((i for i in order["items"] if i["name"] == name), None)
+    if cart_item is None:
+        return {"error": f"'{name}' is not in the current order"}
+
+    if option is not None:
+        menu_item = _find_menu_item(name)
+        if menu_item is None:
+            return {"error": f"'{name}' is not a valid menu item"}
+        options = menu_item.get("options", [])
+        if not options:
+            return {"error": f"'{name}' does not have selectable options"}
+        if option not in options:
+            return {
+                "error": "invalid_option",
+                "message": f"'{option}' is not a valid option for '{name}'.",
+                "available_options": options,
+            }
+        cart_item["options"] = [option]
+
+    if quantity is not None:
+        cart_item["quantity"] = quantity
+
+    order["total"] = round(sum(i["price"] * i["quantity"] for i in order["items"]), 2)
+
+    return {"modified": cart_item, "cart": order}
+
+
 def _run_tool(name, tool_input, session_id):
     if name == "getMenu":
         return _get_active_menu()
     if name == "addItemToCart":
         return _add_item_to_cart(session_id, tool_input)
+    if name == "modifyItem":
+        return _modify_item(session_id, tool_input)
     return {"error": f"unknown tool: {name}"}
 
 
@@ -238,7 +300,7 @@ def chat():
     with open(CHAT_SYSTEM_PATH) as f:
         system_prompt = f.read()
 
-    tools = [GET_MENU_TOOL, ADD_ITEM_TOOL]
+    tools = [GET_MENU_TOOL, ADD_ITEM_TOOL, MODIFY_ITEM_TOOL]
 
     try:
         response = anthropic_client.messages.create(
