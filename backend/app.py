@@ -30,6 +30,7 @@ def _new_order_state():
         "items": [],
         "order_type": None,
         "customer": {"name": None, "phone": None, "email": None},
+        "pickup_time": None,
         "discount": None,
         "total": 0.0,
         "confirmed": False,
@@ -165,6 +166,25 @@ APPLY_PROMOTION_TOOL = {
                 "type": "string",
                 "description": "Exact id of the active promotion to apply, e.g. 'student-discount-10'. Omit to just list active promotions.",
             },
+        },
+        "additionalProperties": False,
+    },
+}
+
+SET_PICKUP_DETAILS_TOOL = {
+    "name": "setPickupDetails",
+    "description": (
+        "Select pickup for the order and record the customer's name (required before "
+        "checkout) and an optional pickup time. Can be called with just one field at a "
+        "time as the customer provides it. Always reports back which required fields are "
+        "still missing, so you only ask for what's not already collected — never ask again "
+        "for something the response shows is already set."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "customerName": {"type": "string", "description": "The customer's name for pickup."},
+            "pickupTime": {"type": "string", "description": "Requested pickup time, if given, e.g. '3:30 PM' or 'in 20 minutes'. Optional."},
         },
         "additionalProperties": False,
     },
@@ -381,6 +401,34 @@ def _apply_promotion(session_id, tool_input):
     return {"applied": order["discount"], "cart": order}
 
 
+def _set_pickup_details(session_id, tool_input):
+    order = get_session_order(session_id)
+    order["order_type"] = "pickup"
+
+    customer_name = tool_input.get("customerName")
+    if customer_name is not None:
+        if not isinstance(customer_name, str) or not customer_name.strip():
+            return {"error": "customerName must be a non-empty string"}
+        order["customer"]["name"] = customer_name.strip()
+
+    pickup_time = tool_input.get("pickupTime")
+    if pickup_time is not None:
+        if not isinstance(pickup_time, str) or not pickup_time.strip():
+            return {"error": "pickupTime must be a non-empty string"}
+        order["pickup_time"] = pickup_time.strip()
+
+    missing = []
+    if not order["customer"]["name"]:
+        missing.append("customerName")
+
+    return {
+        "order_type": order["order_type"],
+        "customer_name": order["customer"]["name"],
+        "pickup_time": order["pickup_time"],
+        "missing": missing,
+    }
+
+
 def _run_tool(name, tool_input, session_id):
     if name == "getMenu":
         return _get_active_menu()
@@ -396,6 +444,8 @@ def _run_tool(name, tool_input, session_id):
         return _get_recommendations(session_id)
     if name == "applyPromotion":
         return _apply_promotion(session_id, tool_input)
+    if name == "setPickupDetails":
+        return _set_pickup_details(session_id, tool_input)
     return {"error": f"unknown tool: {name}"}
 
 
@@ -499,6 +549,7 @@ def chat():
         VIEW_CART_TOOL,
         GET_RECOMMENDATIONS_TOOL,
         APPLY_PROMOTION_TOOL,
+        SET_PICKUP_DETAILS_TOOL,
     ]
 
     try:
