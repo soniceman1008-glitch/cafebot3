@@ -15,6 +15,8 @@
 
 * { box-sizing: border-box; }
 
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -384,6 +386,47 @@ a { color: inherit; }
   color: var(--text);
   border-bottom-left-radius: 4px;
 }
+
+.chat-cart {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--cream-200);
+  border-top: 1px solid var(--cream-200);
+  font-size: 13px;
+  color: var(--brown-900);
+}
+
+.chat-menu-category {
+  font-weight: 700;
+  margin: 10px 0 4px;
+}
+
+.chat-menu-category:first-child { margin-top: 0; }
+
+.chat-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.chat-menu-add {
+  background: var(--white);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.chat-menu-add:hover { background: var(--accent); color: var(--white); }
 
 .chat-quick-actions {
   padding: 0 14px 10px;
