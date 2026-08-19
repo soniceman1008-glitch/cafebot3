@@ -1,3 +1,9 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
 # Gradle files
 .gradle/
 build/
