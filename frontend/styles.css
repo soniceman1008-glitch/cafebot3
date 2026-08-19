@@ -385,6 +385,23 @@ a { color: inherit; }
   border-bottom-left-radius: 4px;
 }
 
+.chat-quick-actions {
+  padding: 0 14px 10px;
+  background: var(--cream-100);
+}
+
+.chat-quick-btn {
+  background: var(--white);
+  color: var(--brown-700);
+  border: 1px solid var(--cream-200);
+  border-radius: var(--radius);
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chat-quick-btn:hover { background: var(--cream-200); }
+
 .chat-form {
   display: flex;
   gap: 8px;
