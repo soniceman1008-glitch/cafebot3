@@ -2,7 +2,10 @@ import json
 import os
 import uuid
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request
+
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -94,4 +97,4 @@ def add_cors_headers(response):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(port=int(os.environ.get("PORT", 5000)), debug=True)
