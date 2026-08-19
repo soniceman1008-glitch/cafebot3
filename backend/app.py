@@ -16,7 +16,7 @@ MENU_PATH = os.path.join(DATA_DIR, "menu.json")
 ORDERS_PATH = os.path.join(DATA_DIR, "orders.json")
 
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
-CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "chat_system.txt")
+CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "system-prompt.md")
 
 
 @app.get("/health")
@@ -91,15 +91,33 @@ def chat():
     if not isinstance(message, str) or not message.strip():
         return jsonify(error="message is required"), 400
 
+    history = data.get("history", [])
+    if not isinstance(history, list):
+        return jsonify(error="history must be a list"), 400
+
+    messages = []
+    for entry in history:
+        if (
+            not isinstance(entry, dict)
+            or entry.get("role") not in ("user", "assistant")
+            or not isinstance(entry.get("content"), str)
+        ):
+            return jsonify(error="each history entry must have role (user or assistant) and content"), 400
+        messages.append({"role": entry["role"], "content": entry["content"]})
+    messages.append({"role": "user", "content": message})
+
     with open(CHAT_SYSTEM_PATH) as f:
         system_prompt = f.read()
+    with open(MENU_PATH) as f:
+        menu_json = f.read()
+    system_prompt += f"\n\n## Current Menu (JSON)\n\n{menu_json}"
 
     try:
         response = anthropic_client.messages.create(
             model="claude-opus-5",
             max_tokens=1024,
             system=system_prompt,
-            messages=[{"role": "user", "content": message}],
+            messages=messages,
         )
     except anthropic.APIError:
         return jsonify(error="chat service unavailable"), 502
