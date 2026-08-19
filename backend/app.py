@@ -112,6 +112,20 @@ REMOVE_ITEM_TOOL = {
     },
 }
 
+VIEW_CART_TOOL = {
+    "name": "viewCart",
+    "description": (
+        "Get a concise, itemized summary of the customer's current order — each item's "
+        "name, quantity, and chosen customizations (like size). Does not include pricing "
+        "or a total."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
+}
+
 
 def _get_active_menu():
     with open(MENU_PATH) as f:
@@ -250,6 +264,14 @@ def _remove_item(session_id, tool_input):
     }
 
 
+def _view_cart(session_id):
+    order = get_session_order(session_id)
+    return [
+        {"name": item["name"], "quantity": item["quantity"], "options": item["options"]}
+        for item in order["items"]
+    ]
+
+
 def _run_tool(name, tool_input, session_id):
     if name == "getMenu":
         return _get_active_menu()
@@ -259,6 +281,8 @@ def _run_tool(name, tool_input, session_id):
         return _modify_item(session_id, tool_input)
     if name == "removeItem":
         return _remove_item(session_id, tool_input)
+    if name == "viewCart":
+        return _view_cart(session_id)
     return {"error": f"unknown tool: {name}"}
 
 
@@ -354,7 +378,7 @@ def chat():
     with open(CHAT_SYSTEM_PATH) as f:
         system_prompt = f.read()
 
-    tools = [GET_MENU_TOOL, ADD_ITEM_TOOL, MODIFY_ITEM_TOOL, REMOVE_ITEM_TOOL]
+    tools = [GET_MENU_TOOL, ADD_ITEM_TOOL, MODIFY_ITEM_TOOL, REMOVE_ITEM_TOOL, VIEW_CART_TOOL]
 
     try:
         response = anthropic_client.messages.create(
