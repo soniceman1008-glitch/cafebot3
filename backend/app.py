@@ -31,7 +31,7 @@ def _new_order_state():
         "order_type": None,
         "customer": {"name": None, "phone": None, "email": None},
         "pickup_time": None,
-        "delivery": {"address": None, "apartment": None, "instructions": None},
+        "delivery": {"address": None, "apartment": None, "instructions": None, "address_confirmed": False},
         "discount": None,
         "total": 0.0,
         "confirmed": False,
@@ -199,7 +199,12 @@ SET_DELIVERY_DETAILS_TOOL = {
         "delivery instructions if applicable (both optional). Can be called with just one "
         "field at a time as the customer provides it. Always reports back which required "
         "fields are still missing, so you only ask for what's not already collected — never "
-        "guess a value or ask again for something the response shows is already set."
+        "guess a value or ask again for something the response shows is already set. "
+        "Changing the address or apartment resets confirmation, since a corrected address "
+        "must be read back and reconfirmed. Before checkout, read the full address (street "
+        "and apartment/unit if given) back to the customer, then pass confirmAddress: true "
+        "only once they explicitly confirm it's correct, or confirmAddress: false if they "
+        "say it's wrong — then correct it via the address/apartment fields and reconfirm."
     ),
     "input_schema": {
         "type": "object",
@@ -209,6 +214,10 @@ SET_DELIVERY_DETAILS_TOOL = {
             "address": {"type": "string", "description": "Full delivery address (street, city, etc.)."},
             "apartment": {"type": "string", "description": "Apartment/unit number, if applicable. Optional."},
             "instructions": {"type": "string", "description": "Delivery instructions, e.g. gate code or where to leave it. Optional."},
+            "confirmAddress": {
+                "type": "boolean",
+                "description": "Set true only after reading the full address back and the customer explicitly confirms it's correct; set false if they say it's wrong.",
+            },
         },
         "additionalProperties": False,
     },
@@ -474,18 +483,28 @@ def _set_delivery_details(session_id, tool_input):
         if not isinstance(address, str) or not address.strip():
             return {"error": "address must be a non-empty string"}
         order["delivery"]["address"] = address.strip()
+        order["delivery"]["address_confirmed"] = False
 
     apartment = tool_input.get("apartment")
     if apartment is not None:
         if not isinstance(apartment, str) or not apartment.strip():
             return {"error": "apartment must be a non-empty string"}
         order["delivery"]["apartment"] = apartment.strip()
+        order["delivery"]["address_confirmed"] = False
 
     instructions = tool_input.get("instructions")
     if instructions is not None:
         if not isinstance(instructions, str) or not instructions.strip():
             return {"error": "instructions must be a non-empty string"}
         order["delivery"]["instructions"] = instructions.strip()
+
+    confirm_address = tool_input.get("confirmAddress")
+    if confirm_address is not None:
+        if not isinstance(confirm_address, bool):
+            return {"error": "confirmAddress must be a boolean"}
+        if confirm_address and not order["delivery"]["address"]:
+            return {"error": "cannot confirm: no delivery address has been captured yet"}
+        order["delivery"]["address_confirmed"] = confirm_address
 
     missing = []
     if not order["customer"]["name"]:
@@ -502,6 +521,7 @@ def _set_delivery_details(session_id, tool_input):
         "address": order["delivery"]["address"],
         "apartment": order["delivery"]["apartment"],
         "instructions": order["delivery"]["instructions"],
+        "address_confirmed": order["delivery"]["address_confirmed"],
         "missing": missing,
     }
 
