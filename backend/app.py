@@ -16,7 +16,34 @@ MENU_PATH = os.path.join(DATA_DIR, "menu.json")
 ORDERS_PATH = os.path.join(DATA_DIR, "orders.json")
 
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
-CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "chat_system.txt")
+CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "system-prompt.md")
+
+GET_MENU_TOOL = {
+    "name": "getMenu",
+    "description": "Get the cafe's current menu, grouped by category. Only currently available items are included.",
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
+}
+
+
+def _get_active_menu():
+    with open(MENU_PATH) as f:
+        categories = json.load(f)
+    active = []
+    for cat in categories:
+        active_items = [item for item in cat["items"] if item.get("available", True)]
+        if active_items:
+            active.append({"category": cat["category"], "items": active_items})
+    return active
+
+
+def _run_tool(name, tool_input):
+    if name == "getMenu":
+        return _get_active_menu()
+    return {"error": f"unknown tool: {name}"}
 
 
 @app.get("/health")
@@ -91,6 +118,21 @@ def chat():
     if not isinstance(message, str) or not message.strip():
         return jsonify(error="message is required"), 400
 
+    history = data.get("history", [])
+    if not isinstance(history, list):
+        return jsonify(error="history must be a list"), 400
+
+    messages = []
+    for entry in history:
+        if (
+            not isinstance(entry, dict)
+            or entry.get("role") not in ("user", "assistant")
+            or not isinstance(entry.get("content"), str)
+        ):
+            return jsonify(error="each history entry must have role (user or assistant) and content"), 400
+        messages.append({"role": entry["role"], "content": entry["content"]})
+    messages.append({"role": "user", "content": message})
+
     with open(CHAT_SYSTEM_PATH) as f:
         system_prompt = f.read()
 
@@ -99,8 +141,31 @@ def chat():
             model="claude-opus-5",
             max_tokens=1024,
             system=system_prompt,
-            messages=[{"role": "user", "content": message}],
+            tools=[GET_MENU_TOOL],
+            messages=messages,
         )
+
+        while response.stop_reason == "tool_use":
+            tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
+            messages.append({"role": "assistant", "content": response.content})
+
+            tool_results = [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": json.dumps(_run_tool(block.name, block.input)),
+                }
+                for block in tool_use_blocks
+            ]
+            messages.append({"role": "user", "content": tool_results})
+
+            response = anthropic_client.messages.create(
+                model="claude-opus-5",
+                max_tokens=1024,
+                system=system_prompt,
+                tools=[GET_MENU_TOOL],
+                messages=messages,
+            )
     except anthropic.APIError:
         return jsonify(error="chat service unavailable"), 502
 
