@@ -13,8 +13,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const cartBar = document.getElementById("chat-cart");
   const cartSummary = document.getElementById("chat-cart-summary");
   const placeOrderBtn = document.getElementById("chat-place-order");
+  const ordersBtn = document.getElementById("chat-orders-btn");
 
   let order = [];
+  let placedOrders = [];
 
   function setOpen(open) {
     chatWindow.hidden = !open;
@@ -112,6 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `Order placed! Confirmation #${data.order_id.slice(0, 8)} — total $${data.total.toFixed(2)}. Thank you!`,
         "bot"
       );
+      placedOrders.push({ id: data.order_id, items: data.items, total: data.total });
       order = [];
       renderCart();
     } catch (err) {
@@ -120,6 +123,42 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   placeOrderBtn.addEventListener("click", () => placeOrder());
+
+  function showOrderHistory() {
+    if (placedOrders.length === 0) {
+      appendMessage("You haven't placed any orders yet.", "bot");
+      return;
+    }
+    const wrapper = document.createElement("div");
+    wrapper.className = "chat-msg bot";
+    placedOrders.forEach((o) => {
+      const block = document.createElement("div");
+      block.className = "chat-order";
+
+      const header = document.createElement("div");
+      header.className = "chat-order-id";
+      header.textContent = `Order #${o.id.slice(0, 8)}`;
+      block.appendChild(header);
+
+      o.items.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "chat-menu-item";
+        row.textContent = `${item.name} x${item.quantity} — $${(item.price * item.quantity).toFixed(2)}`;
+        block.appendChild(row);
+      });
+
+      const total = document.createElement("div");
+      total.className = "chat-order-total";
+      total.textContent = `Total: $${o.total.toFixed(2)}`;
+      block.appendChild(total);
+
+      wrapper.appendChild(block);
+    });
+    log.appendChild(wrapper);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  ordersBtn.addEventListener("click", () => showOrderHistory());
 
   async function sendChat(text) {
     try {

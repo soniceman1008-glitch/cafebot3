@@ -428,7 +428,25 @@ a { color: inherit; }
 
 .chat-menu-add:hover { background: var(--accent); color: var(--white); }
 
+.chat-order { margin-bottom: 12px; }
+
+.chat-order:last-child { margin-bottom: 0; }
+
+.chat-order-id {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.chat-order-total {
+  font-weight: 600;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--brown-500);
+}
+
 .chat-quick-actions {
+  display: flex;
+  gap: 8px;
   padding: 0 14px 10px;
   background: var(--cream-100);
 }
