@@ -446,6 +446,7 @@ a { color: inherit; }
 
 .chat-quick-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 0 14px 10px;
   background: var(--cream-100);
