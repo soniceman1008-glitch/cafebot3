@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const cartSummary = document.getElementById("chat-cart-summary");
   const placeOrderBtn = document.getElementById("chat-place-order");
   const ordersBtn = document.getElementById("chat-orders-btn");
+  const allOrdersBtn = document.getElementById("chat-all-orders-btn");
 
   let order = [];
   let placedOrders = [];
@@ -124,14 +125,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   placeOrderBtn.addEventListener("click", () => placeOrder());
 
-  function showOrderHistory() {
-    if (placedOrders.length === 0) {
-      appendMessage("You haven't placed any orders yet.", "bot");
-      return;
-    }
+  function appendOrderList(orders) {
     const wrapper = document.createElement("div");
     wrapper.className = "chat-msg bot";
-    placedOrders.forEach((o) => {
+    orders.forEach((o) => {
       const block = document.createElement("div");
       block.className = "chat-order";
 
@@ -158,7 +155,32 @@ document.addEventListener("DOMContentLoaded", () => {
     log.scrollTop = log.scrollHeight;
   }
 
+  function showOrderHistory() {
+    if (placedOrders.length === 0) {
+      appendMessage("You haven't placed any orders yet.", "bot");
+      return;
+    }
+    appendOrderList(placedOrders);
+  }
+
   ordersBtn.addEventListener("click", () => showOrderHistory());
+
+  async function showAllOrders() {
+    try {
+      const res = await fetch(`${API_BASE}/orders`);
+      if (!res.ok) throw new Error("orders request failed");
+      const orders = await res.json();
+      if (orders.length === 0) {
+        appendMessage("No orders have been placed yet.", "bot");
+        return;
+      }
+      appendOrderList(orders);
+    } catch (err) {
+      appendMessage("Sorry, I couldn't load orders right now.", "bot");
+    }
+  }
+
+  allOrdersBtn.addEventListener("click", () => showAllOrders());
 
   async function sendChat(text) {
     try {

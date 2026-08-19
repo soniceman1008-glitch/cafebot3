@@ -68,6 +68,14 @@ def place_order():
     return jsonify(order_id=order_record["id"], items=order_items, total=order_record["total"])
 
 
+@app.get("/orders")
+def list_orders():
+    if not os.path.exists(ORDERS_PATH):
+        return jsonify([])
+    with open(ORDERS_PATH) as f:
+        return jsonify(json.load(f))
+
+
 @app.post("/chat")
 def chat():
     data = request.get_json(silent=True) or {}
