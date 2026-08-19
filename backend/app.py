@@ -42,6 +42,11 @@ def get_session_order(session_id):
     return session_orders[session_id]
 
 
+# Tracks item names already recommended per session, so a suggestion is never repeated
+# (whether accepted — it's already in the cart — or declined). Separate from order state.
+session_suggestions = {}
+
+
 GET_MENU_TOOL = {
     "name": "getMenu",
     "description": "Get the cafe's current menu, grouped by category. Only currently available items are included.",
@@ -118,6 +123,22 @@ VIEW_CART_TOOL = {
         "Get a concise, itemized summary of the customer's current order — each item's "
         "name, quantity, and chosen customizations (like size). Does not include pricing "
         "or a total."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
+}
+
+GET_RECOMMENDATIONS_TOOL = {
+    "name": "getRecommendations",
+    "description": (
+        "Suggest at most 1-2 real, relevant menu items to pair with the customer's current "
+        "order (e.g. a pastry with a coffee). Only ever returns real items already on the "
+        "menu — never invent a suggestion. Automatically excludes items already in the "
+        "cart and anything already suggested this session, so a suggestion is never "
+        "repeated, whether the customer accepted or declined it."
     ),
     "input_schema": {
         "type": "object",
@@ -272,6 +293,38 @@ def _view_cart(session_id):
     ]
 
 
+def _get_recommendations(session_id):
+    order = get_session_order(session_id)
+    cart_names = {item["name"] for item in order["items"]}
+    suggested = session_suggestions.setdefault(session_id, set())
+
+    active = _get_active_menu()
+    cart_categories = {
+        cat["category"] for cat in active for item in cat["items"] if item["name"] in cart_names
+    }
+
+    candidates = []
+    for cat in active:
+        for item in cat["items"]:
+            if item["name"] in cart_names or item["name"] in suggested:
+                continue
+            # Prefer a different category from what's already in the cart (cross-sell pairing).
+            priority = 0 if cat["category"] not in cart_categories else 1
+            candidates.append((priority, cat["category"], item))
+
+    candidates.sort(key=lambda c: c[0])
+    picks = candidates[:2]
+
+    recommendations = [
+        {"name": item["name"], "category": category, "description": item["description"], "price": item["price"]}
+        for _priority, category, item in picks
+    ]
+    for rec in recommendations:
+        suggested.add(rec["name"])
+
+    return recommendations
+
+
 def _run_tool(name, tool_input, session_id):
     if name == "getMenu":
         return _get_active_menu()
@@ -283,6 +336,8 @@ def _run_tool(name, tool_input, session_id):
         return _remove_item(session_id, tool_input)
     if name == "viewCart":
         return _view_cart(session_id)
+    if name == "getRecommendations":
+        return _get_recommendations(session_id)
     return {"error": f"unknown tool: {name}"}
 
 
@@ -378,7 +433,7 @@ def chat():
     with open(CHAT_SYSTEM_PATH) as f:
         system_prompt = f.read()
 
-    tools = [GET_MENU_TOOL, ADD_ITEM_TOOL, MODIFY_ITEM_TOOL, REMOVE_ITEM_TOOL, VIEW_CART_TOOL]
+    tools = [GET_MENU_TOOL, ADD_ITEM_TOOL, MODIFY_ITEM_TOOL, REMOVE_ITEM_TOOL, VIEW_CART_TOOL, GET_RECOMMENDATIONS_TOOL]
 
     try:
         response = anthropic_client.messages.create(
