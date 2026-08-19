@@ -264,6 +264,22 @@ GET_ORDER_TOTAL_TOOL = {
     },
 }
 
+GET_ORDER_SUMMARY_TOOL = {
+    "name": "getOrderSummary",
+    "description": (
+        "Get a complete, structured summary of the order for final review before checkout: "
+        "items with quantities and customizations, fulfillment details (pickup or "
+        "delivery, with whatever's been collected so far), any promotion applied, and the "
+        "real calculated total. Always call this immediately before asking the customer to "
+        "give final confirmation — never assemble the summary from memory."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
+}
+
 
 def _get_active_menu():
     with open(MENU_PATH) as f:
@@ -581,6 +597,43 @@ def _get_order_total(session_id):
     }
 
 
+def _get_order_summary(session_id):
+    order = get_session_order(session_id)
+    _recompute_total(order)
+
+    items = [
+        {"name": i["name"], "quantity": i["quantity"], "options": i["options"]}
+        for i in order["items"]
+    ]
+
+    fulfillment = {"type": order["order_type"]}
+    if order["order_type"] == "pickup":
+        fulfillment["customer_name"] = order["customer"]["name"]
+        fulfillment["pickup_time"] = order["pickup_time"]
+    elif order["order_type"] == "delivery":
+        fulfillment["customer_name"] = order["customer"]["name"]
+        fulfillment["phone"] = order["customer"]["phone"]
+        fulfillment["address"] = order["delivery"]["address"]
+        fulfillment["apartment"] = order["delivery"]["apartment"]
+        fulfillment["instructions"] = order["delivery"]["instructions"]
+        fulfillment["address_confirmed"] = order["delivery"]["address_confirmed"]
+
+    promotions = [order["discount"]] if order["discount"] else []
+
+    return {
+        "items": items,
+        "fulfillment": fulfillment,
+        "promotions": promotions,
+        "pricing": {
+            "subtotal": order["subtotal"],
+            "discount": order["discount"]["amount"] if order["discount"] else 0.0,
+            "tax": order["tax"],
+            "delivery_fee": order["delivery_fee"],
+            "total": order["total"],
+        },
+    }
+
+
 def _run_tool(name, tool_input, session_id):
     if name == "getMenu":
         return _get_active_menu()
@@ -602,6 +655,8 @@ def _run_tool(name, tool_input, session_id):
         return _set_delivery_details(session_id, tool_input)
     if name == "getOrderTotal":
         return _get_order_total(session_id)
+    if name == "getOrderSummary":
+        return _get_order_summary(session_id)
     return {"error": f"unknown tool: {name}"}
 
 
@@ -708,6 +763,7 @@ def chat():
         SET_PICKUP_DETAILS_TOOL,
         SET_DELIVERY_DETAILS_TOOL,
         GET_ORDER_TOTAL_TOOL,
+        GET_ORDER_SUMMARY_TOOL,
     ]
 
     try:
