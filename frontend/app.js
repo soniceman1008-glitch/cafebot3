@@ -10,6 +10,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("chat-form");
   const input = document.getElementById("chat-input");
   const menuBtn = document.getElementById("chat-menu-btn");
+  const cartBar = document.getElementById("chat-cart");
+  const cartSummary = document.getElementById("chat-cart-summary");
+  const placeOrderBtn = document.getElementById("chat-place-order");
+
+  let order = [];
 
   function setOpen(open) {
     chatWindow.hidden = !open;
@@ -28,24 +33,93 @@ document.addEventListener("DOMContentLoaded", () => {
     log.scrollTop = log.scrollHeight;
   }
 
+  function renderCart() {
+    if (order.length === 0) {
+      cartBar.hidden = true;
+      return;
+    }
+    const totalItems = order.reduce((sum, o) => sum + o.quantity, 0);
+    const total = order.reduce((sum, o) => sum + o.price * o.quantity, 0);
+    cartSummary.textContent = `${totalItems} item${totalItems === 1 ? "" : "s"} — $${total.toFixed(2)}`;
+    cartBar.hidden = false;
+  }
+
+  function addToOrder(item) {
+    const existing = order.find((o) => o.name === item.name);
+    if (existing) {
+      existing.quantity += 1;
+    } else {
+      order.push({ name: item.name, price: item.price, quantity: 1 });
+    }
+    renderCart();
+    appendMessage(`Added ${item.name} to your order.`, "bot");
+  }
+
+  function appendMenu(categories) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "chat-msg bot";
+    categories.forEach((cat) => {
+      const catEl = document.createElement("div");
+      catEl.className = "chat-menu-category";
+      catEl.textContent = cat.category;
+      wrapper.appendChild(catEl);
+      cat.items.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "chat-menu-item";
+
+        const label = document.createElement("span");
+        label.textContent = `${item.name} — $${item.price.toFixed(2)}`;
+
+        const addBtn = document.createElement("button");
+        addBtn.type = "button";
+        addBtn.className = "chat-menu-add";
+        addBtn.textContent = "Add";
+        addBtn.addEventListener("click", () => addToOrder(item));
+
+        row.appendChild(label);
+        row.appendChild(addBtn);
+        wrapper.appendChild(row);
+      });
+    });
+    log.appendChild(wrapper);
+    log.scrollTop = log.scrollHeight;
+  }
+
   async function showMenu() {
     try {
       const res = await fetch(`${API_BASE}/menu`);
       if (!res.ok) throw new Error("menu request failed");
       const categories = await res.json();
-      const text = categories
-        .map((cat) => {
-          const items = cat.items
-            .map((item) => `  ${item.name} — $${item.price.toFixed(2)}`)
-            .join("\n");
-          return `${cat.category}\n${items}`;
-        })
-        .join("\n\n");
-      appendMessage(text, "bot");
+      appendMenu(categories);
     } catch (err) {
       appendMessage("Sorry, I couldn't load the menu right now.", "bot");
     }
   }
+
+  async function placeOrder() {
+    if (order.length === 0) return;
+    try {
+      const res = await fetch(`${API_BASE}/order`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: order.map((o) => ({ name: o.name, quantity: o.quantity })),
+        }),
+      });
+      if (!res.ok) throw new Error("order request failed");
+      const data = await res.json();
+      appendMessage(
+        `Order placed! Confirmation #${data.order_id.slice(0, 8)} — total $${data.total.toFixed(2)}. Thank you!`,
+        "bot"
+      );
+      order = [];
+      renderCart();
+    } catch (err) {
+      appendMessage("Sorry, I couldn't place your order right now.", "bot");
+    }
+  }
+
+  placeOrderBtn.addEventListener("click", () => placeOrder());
 
   async function sendChat(text) {
     try {
