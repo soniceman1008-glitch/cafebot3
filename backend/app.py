@@ -14,6 +14,7 @@ anthropic_client = anthropic.Anthropic()
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 MENU_PATH = os.path.join(DATA_DIR, "menu.json")
 ORDERS_PATH = os.path.join(DATA_DIR, "orders.json")
+PROMOTIONS_PATH = os.path.join(DATA_DIR, "promotions.json")
 
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "system-prompt.md")
@@ -143,6 +144,28 @@ GET_RECOMMENDATIONS_TOOL = {
     "input_schema": {
         "type": "object",
         "properties": {},
+        "additionalProperties": False,
+    },
+}
+
+APPLY_PROMOTION_TOOL = {
+    "name": "applyPromotion",
+    "description": (
+        "List currently active promotions, or apply one to the customer's order by its "
+        "exact id. Only promotions marked active in the promotions data are ever returned "
+        "or applied — inactive ones and any id/code not found there are always rejected, "
+        "never invented or accepted. Omit promotionId to list active promotions along with "
+        "their eligibility rules, so you can check them against the order and ask the "
+        "customer anything needed (like a student ID) before applying one."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "promotionId": {
+                "type": "string",
+                "description": "Exact id of the active promotion to apply, e.g. 'student-discount-10'. Omit to just list active promotions.",
+            },
+        },
         "additionalProperties": False,
     },
 }
@@ -325,6 +348,39 @@ def _get_recommendations(session_id):
     return recommendations
 
 
+def _active_promotions():
+    with open(PROMOTIONS_PATH) as f:
+        promotions = json.load(f)
+    return [p for p in promotions if p.get("active", False)]
+
+
+def _apply_promotion(session_id, tool_input):
+    promotion_id = tool_input.get("promotionId")
+
+    active = _active_promotions()
+
+    if not promotion_id:
+        return {"active_promotions": active}
+
+    promo = next((p for p in active if p["id"] == promotion_id), None)
+    if promo is None:
+        return {"error": f"'{promotion_id}' is not a recognized active promotion"}
+
+    order = get_session_order(session_id)
+    subtotal = sum(i["price"] * i["quantity"] for i in order["items"])
+
+    discount = promo["discount"]
+    if discount["type"] == "percentage":
+        discount_amount = round(subtotal * discount["value"] / 100, 2)
+    else:
+        discount_amount = round(discount["value"], 2)
+
+    order["discount"] = {"id": promo["id"], "name": promo["name"], "amount": discount_amount}
+    order["total"] = round(max(subtotal - discount_amount, 0), 2)
+
+    return {"applied": order["discount"], "cart": order}
+
+
 def _run_tool(name, tool_input, session_id):
     if name == "getMenu":
         return _get_active_menu()
@@ -338,6 +394,8 @@ def _run_tool(name, tool_input, session_id):
         return _view_cart(session_id)
     if name == "getRecommendations":
         return _get_recommendations(session_id)
+    if name == "applyPromotion":
+        return _apply_promotion(session_id, tool_input)
     return {"error": f"unknown tool: {name}"}
 
 
@@ -433,7 +491,15 @@ def chat():
     with open(CHAT_SYSTEM_PATH) as f:
         system_prompt = f.read()
 
-    tools = [GET_MENU_TOOL, ADD_ITEM_TOOL, MODIFY_ITEM_TOOL, REMOVE_ITEM_TOOL, VIEW_CART_TOOL, GET_RECOMMENDATIONS_TOOL]
+    tools = [
+        GET_MENU_TOOL,
+        ADD_ITEM_TOOL,
+        MODIFY_ITEM_TOOL,
+        REMOVE_ITEM_TOOL,
+        VIEW_CART_TOOL,
+        GET_RECOMMENDATIONS_TOOL,
+        APPLY_PROMOTION_TOOL,
+    ]
 
     try:
         response = anthropic_client.messages.create(
