@@ -1,0 +1,34 @@
+[
+  {
+    "category": "Coffee",
+    "items": [
+      { "name": "Espresso", "price": 2.50, "description": "Rich double shot of espresso." },
+      { "name": "Latte", "price": 3.75, "description": "Espresso with steamed milk." },
+      { "name": "Cappuccino", "price": 3.75, "description": "Espresso, steamed milk, thick foam." },
+      { "name": "Mocha", "price": 4.25, "description": "Espresso, chocolate, steamed milk." },
+      { "name": "Cold Brew", "price": 4.00, "description": "Slow-steeped, smooth and bold." }
+    ]
+  },
+  {
+    "category": "Tea",
+    "items": [
+      { "name": "Green Tea", "price": 2.75, "description": "Light and refreshing." },
+      { "name": "Chai Latte", "price": 3.50, "description": "Spiced tea with steamed milk." }
+    ]
+  },
+  {
+    "category": "Pastries",
+    "items": [
+      { "name": "Croissant", "price": 3.00, "description": "Buttery, flaky, baked fresh daily." },
+      { "name": "Blueberry Muffin", "price": 3.25, "description": "Loaded with real blueberries." },
+      { "name": "Chocolate Brownie", "price": 3.50, "description": "Fudgy and rich." }
+    ]
+  },
+  {
+    "category": "Sandwiches",
+    "items": [
+      { "name": "Turkey & Swiss", "price": 6.50, "description": "On toasted sourdough." },
+      { "name": "Veggie Panini", "price": 6.00, "description": "Grilled vegetables and mozzarella." }
+    ]
+  }
+]
