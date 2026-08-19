@@ -47,6 +47,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  async function sendChat(text) {
+    try {
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      if (!res.ok) throw new Error("chat request failed");
+      const data = await res.json();
+      appendMessage(data.reply, "bot");
+    } catch (err) {
+      appendMessage("Sorry, I'm having trouble responding right now.", "bot");
+    }
+  }
+
   menuBtn.addEventListener("click", () => showMenu());
 
   form.addEventListener("submit", (e) => {
@@ -58,7 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (/menu/i.test(text)) {
       showMenu();
     } else {
-      appendMessage("Hi! I'm CafeBot. My AI brain isn't connected yet.", "bot");
+      sendChat(text);
     }
   });
 });
