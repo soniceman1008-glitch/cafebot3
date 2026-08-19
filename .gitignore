@@ -14,9 +14,6 @@ __pycache__/
 .venv/
 venv/
 
-# Runtime order data
-data/orders.json
-
 # Gradle files
 .gradle/
 build/
