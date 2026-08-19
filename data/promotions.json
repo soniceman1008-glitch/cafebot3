@@ -1,0 +1,35 @@
+[
+  {
+    "id": "happy-hour-20",
+    "name": "Happy Hour 20% Off",
+    "rule": "20% off all Coffee and Tea items",
+    "discount": { "type": "percentage", "value": 20 },
+    "eligibility": [
+      "Applies to Coffee and Tea category items only",
+      "Valid Monday-Friday, 2:00 PM - 4:00 PM"
+    ],
+    "active": true
+  },
+  {
+    "id": "student-discount-10",
+    "name": "Student Discount",
+    "rule": "10% off the entire order",
+    "discount": { "type": "percentage", "value": 10 },
+    "eligibility": [
+      "Valid student ID required at time of order",
+      "One discount per customer per visit"
+    ],
+    "active": true
+  },
+  {
+    "id": "summer-kickoff-2-off",
+    "name": "Summer Kickoff $2 Off",
+    "rule": "$2 off any order of $10 or more",
+    "discount": { "type": "fixed", "value": 2.00 },
+    "eligibility": [
+      "Order subtotal must be $10 or more before discount",
+      "Valid June 1-30, 2024 only"
+    ],
+    "active": false
+  }
+]
