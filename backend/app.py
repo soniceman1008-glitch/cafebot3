@@ -93,6 +93,26 @@ MODIFY_ITEM_TOOL = {
 }
 
 
+REMOVE_ITEM_TOOL = {
+    "name": "removeItem",
+    "description": (
+        "Remove an item from the customer's order, or reduce its quantity. Requires the "
+        "exact item name as it appears in the cart. If quantity is omitted, or is greater "
+        "than or equal to the current quantity, the item is removed entirely; otherwise "
+        "its quantity is reduced by that amount."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "Exact name of the item in the cart to remove or reduce."},
+            "quantity": {"type": "integer", "minimum": 1, "description": "How many to remove. Omit to remove the item entirely."},
+        },
+        "required": ["name"],
+        "additionalProperties": False,
+    },
+}
+
+
 def _get_active_menu():
     with open(MENU_PATH) as f:
         categories = json.load(f)
@@ -198,6 +218,38 @@ def _modify_item(session_id, tool_input):
     return {"modified": cart_item, "cart": order}
 
 
+def _remove_item(session_id, tool_input):
+    name = tool_input.get("name")
+    quantity = tool_input.get("quantity")
+
+    if not isinstance(name, str) or not name.strip():
+        return {"error": "name is required"}
+    if quantity is not None and (not isinstance(quantity, int) or quantity < 1):
+        return {"error": "quantity must be a positive integer"}
+
+    order = get_session_order(session_id)
+    cart_item = next((i for i in order["items"] if i["name"] == name), None)
+    if cart_item is None:
+        return {"error": f"'{name}' is not in the current order"}
+
+    if quantity is None or quantity >= cart_item["quantity"]:
+        removed_quantity = cart_item["quantity"]
+        order["items"].remove(cart_item)
+        remaining_quantity = 0
+    else:
+        cart_item["quantity"] -= quantity
+        removed_quantity = quantity
+        remaining_quantity = cart_item["quantity"]
+
+    order["total"] = round(sum(i["price"] * i["quantity"] for i in order["items"]), 2)
+
+    return {
+        "removed": {"name": name, "quantity": removed_quantity},
+        "remaining_quantity": remaining_quantity,
+        "cart": order,
+    }
+
+
 def _run_tool(name, tool_input, session_id):
     if name == "getMenu":
         return _get_active_menu()
@@ -205,6 +257,8 @@ def _run_tool(name, tool_input, session_id):
         return _add_item_to_cart(session_id, tool_input)
     if name == "modifyItem":
         return _modify_item(session_id, tool_input)
+    if name == "removeItem":
+        return _remove_item(session_id, tool_input)
     return {"error": f"unknown tool: {name}"}
 
 
@@ -300,7 +354,7 @@ def chat():
     with open(CHAT_SYSTEM_PATH) as f:
         system_prompt = f.read()
 
-    tools = [GET_MENU_TOOL, ADD_ITEM_TOOL, MODIFY_ITEM_TOOL]
+    tools = [GET_MENU_TOOL, ADD_ITEM_TOOL, MODIFY_ITEM_TOOL, REMOVE_ITEM_TOOL]
 
     try:
         response = anthropic_client.messages.create(
