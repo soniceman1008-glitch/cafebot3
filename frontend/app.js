@@ -1,0 +1,1 @@
+// CafeBot frontend app logic
