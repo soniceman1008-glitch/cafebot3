@@ -2,33 +2,147 @@
   {
     "category": "Coffee",
     "items": [
-      { "name": "Espresso", "price": 2.50, "description": "Rich double shot of espresso." },
-      { "name": "Latte", "price": 3.75, "description": "Espresso with steamed milk." },
-      { "name": "Cappuccino", "price": 3.75, "description": "Espresso, steamed milk, thick foam." },
-      { "name": "Mocha", "price": 4.25, "description": "Espresso, chocolate, steamed milk." },
-      { "name": "Cold Brew", "price": 4.00, "description": "Slow-steeped, smooth and bold." }
+      {
+        "id": "espresso",
+        "name": "Espresso",
+        "description": "Rich double shot of espresso.",
+        "price": 2.50,
+        "options": ["Single", "Double"],
+        "allergens": [],
+        "available": true
+      },
+      {
+        "id": "latte",
+        "name": "Latte",
+        "description": "Espresso with steamed milk.",
+        "price": 3.75,
+        "options": ["Small", "Medium", "Large"],
+        "allergens": ["dairy"],
+        "available": true
+      },
+      {
+        "id": "cappuccino",
+        "name": "Cappuccino",
+        "description": "Espresso, steamed milk, thick foam.",
+        "price": 3.75,
+        "options": ["Small", "Medium", "Large"],
+        "allergens": ["dairy"],
+        "available": true
+      },
+      {
+        "id": "mocha",
+        "name": "Mocha",
+        "description": "Espresso, chocolate, steamed milk.",
+        "price": 4.25,
+        "options": ["Small", "Medium", "Large"],
+        "allergens": ["dairy"],
+        "available": true
+      },
+      {
+        "id": "cold-brew",
+        "name": "Cold Brew",
+        "description": "Slow-steeped, smooth and bold.",
+        "price": 4.00,
+        "options": ["Small", "Medium", "Large"],
+        "allergens": [],
+        "available": true
+      }
     ]
   },
   {
     "category": "Tea",
     "items": [
-      { "name": "Green Tea", "price": 2.75, "description": "Light and refreshing." },
-      { "name": "Chai Latte", "price": 3.50, "description": "Spiced tea with steamed milk." }
+      {
+        "id": "green-tea",
+        "name": "Green Tea",
+        "description": "Light and refreshing.",
+        "price": 2.75,
+        "options": ["Hot", "Iced"],
+        "allergens": [],
+        "available": true
+      },
+      {
+        "id": "chai-latte",
+        "name": "Chai Latte",
+        "description": "Spiced tea with steamed milk.",
+        "price": 3.50,
+        "options": ["Small", "Medium", "Large"],
+        "allergens": ["dairy"],
+        "available": true
+      }
     ]
   },
   {
     "category": "Pastries",
     "items": [
-      { "name": "Croissant", "price": 3.00, "description": "Buttery, flaky, baked fresh daily." },
-      { "name": "Blueberry Muffin", "price": 3.25, "description": "Loaded with real blueberries." },
-      { "name": "Chocolate Brownie", "price": 3.50, "description": "Fudgy and rich." }
+      {
+        "id": "croissant",
+        "name": "Croissant",
+        "description": "Buttery, flaky, baked fresh daily.",
+        "price": 3.00,
+        "options": [],
+        "allergens": ["gluten", "dairy"],
+        "available": true
+      },
+      {
+        "id": "blueberry-muffin",
+        "name": "Blueberry Muffin",
+        "description": "Loaded with real blueberries.",
+        "price": 3.25,
+        "options": [],
+        "allergens": ["gluten", "dairy", "egg"],
+        "available": true
+      },
+      {
+        "id": "chocolate-brownie",
+        "name": "Chocolate Brownie",
+        "description": "Fudgy and rich.",
+        "price": 3.50,
+        "options": [],
+        "allergens": ["gluten", "dairy", "egg"],
+        "available": true
+      },
+      {
+        "id": "cinnamon-roll",
+        "name": "Cinnamon Roll",
+        "description": "Warm, soft, and swirled with cinnamon sugar.",
+        "price": 3.75,
+        "options": [],
+        "allergens": ["gluten", "dairy", "egg"],
+        "available": false
+      }
     ]
   },
   {
     "category": "Sandwiches",
     "items": [
-      { "name": "Turkey & Swiss", "price": 6.50, "description": "On toasted sourdough." },
-      { "name": "Veggie Panini", "price": 6.00, "description": "Grilled vegetables and mozzarella." }
+      {
+        "id": "turkey-swiss",
+        "name": "Turkey & Swiss",
+        "description": "On toasted sourdough.",
+        "price": 6.50,
+        "options": [],
+        "allergens": ["gluten", "dairy"],
+        "available": true
+      },
+      {
+        "id": "veggie-panini",
+        "name": "Veggie Panini",
+        "description": "Grilled vegetables and mozzarella.",
+        "price": 6.00,
+        "options": [],
+        "allergens": ["gluten", "dairy"],
+        "available": true
+      },
+      {
+        "id": "ham-cheddar",
+        "name": "Ham & Cheddar",
+        "description": "Classic ham and cheddar on a toasted roll.",
+        "price": 6.75,
+        "options": [],
+        "allergens": ["gluten", "dairy"],
+        "available": true
+      }
     ]
   }
 ]
