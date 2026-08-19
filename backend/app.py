@@ -2,16 +2,21 @@ import json
 import os
 import uuid
 
+import anthropic
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 
 load_dotenv()
 
 app = Flask(__name__)
+anthropic_client = anthropic.Anthropic()
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 MENU_PATH = os.path.join(DATA_DIR, "menu.json")
 ORDERS_PATH = os.path.join(DATA_DIR, "orders.json")
+
+PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
+CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "chat_system.txt")
 
 
 @app.get("/health")
@@ -85,7 +90,22 @@ def chat():
     message = data.get("message")
     if not isinstance(message, str) or not message.strip():
         return jsonify(error="message is required"), 400
-    return jsonify(reply="Hi! I'm CafeBot. My AI brain isn't connected yet.")
+
+    with open(CHAT_SYSTEM_PATH) as f:
+        system_prompt = f.read()
+
+    try:
+        response = anthropic_client.messages.create(
+            model="claude-opus-5",
+            max_tokens=1024,
+            system=system_prompt,
+            messages=[{"role": "user", "content": message}],
+        )
+    except anthropic.APIError:
+        return jsonify(error="chat service unavailable"), 502
+
+    reply = next((block.text for block in response.content if block.type == "text"), "")
+    return jsonify(reply=reply)
 
 
 @app.after_request
