@@ -1,7 +1,7 @@
 import json
 import os
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
@@ -18,6 +18,15 @@ def health():
 def menu():
     with open(MENU_PATH) as f:
         return jsonify(json.load(f))
+
+
+@app.post("/chat")
+def chat():
+    data = request.get_json(silent=True) or {}
+    message = data.get("message")
+    if not isinstance(message, str) or not message.strip():
+        return jsonify(error="message is required"), 400
+    return jsonify(reply="Hi! I'm CafeBot. My AI brain isn't connected yet.")
 
 
 @app.after_request
