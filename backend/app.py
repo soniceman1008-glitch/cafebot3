@@ -19,6 +19,30 @@ PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "chat_system.txt")
 
 
+# In-memory session order state. Not persisted, not a database — resets on restart.
+# Each session's state: items (each with quantity/options), orderType, customer details,
+# discount, total, confirmed, and status.
+session_orders = {}
+
+
+def _new_order_state():
+    return {
+        "items": [],
+        "order_type": None,
+        "customer": {"name": None, "phone": None, "email": None},
+        "discount": None,
+        "total": 0.0,
+        "confirmed": False,
+        "status": "in_progress",
+    }
+
+
+def get_session_order(session_id):
+    if session_id not in session_orders:
+        session_orders[session_id] = _new_order_state()
+    return session_orders[session_id]
+
+
 @app.get("/health")
 def health():
     return jsonify(status="ok")
