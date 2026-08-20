@@ -263,6 +263,10 @@ a { color: inherit; }
   font-size: 14px;
 }
 
+.footer-inner a {
+  color: inherit;
+}
+
 /* Responsive */
 
 @media (max-width: 640px) {
