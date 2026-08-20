@@ -4,6 +4,7 @@
     "name": "Happy Hour 20% Off",
     "rule": "20% off all Coffee and Tea items",
     "discount": { "type": "percentage", "value": 20 },
+    "appliesToCategories": ["Coffee", "Tea"],
     "eligibility": [
       "Applies to Coffee and Tea category items only",
       "Valid Monday-Friday, 2:00 PM - 4:00 PM"

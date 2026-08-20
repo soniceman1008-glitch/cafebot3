@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import uuid
+from decimal import Decimal, ROUND_HALF_UP
 
 import anthropic
 from dotenv import load_dotenv
@@ -61,19 +62,27 @@ def get_session_order(session_id):
     return session_orders[session_id]
 
 
+def _round_currency(amount):
+    """Round to the nearest cent using standard round-half-up currency convention.
+    Python's builtin round() uses round-half-to-even on floats, which silently rounds
+    exact-half-cent amounts (e.g. 10% of $10.25) down instead of up — always go through
+    Decimal for money."""
+    return float(Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
 def _recompute_total(order):
     """The single, deterministic source of truth for order pricing — never let the model
     calculate or invent these figures itself."""
-    subtotal = round(sum(i["price"] * i["quantity"] for i in order["items"]), 2)
+    subtotal = _round_currency(sum(i["price"] * i["quantity"] for i in order["items"]))
     discount_amount = order["discount"]["amount"] if order["discount"] else 0.0
-    after_discount = max(round(subtotal - discount_amount, 2), 0.0)
-    tax = round(after_discount * TAX_RATE, 2)
+    after_discount = max(_round_currency(subtotal - discount_amount), 0.0)
+    tax = _round_currency(after_discount * TAX_RATE)
     delivery_fee = DELIVERY_FEE if order["order_type"] == "delivery" else 0.0
 
     order["subtotal"] = subtotal
     order["tax"] = tax
     order["delivery_fee"] = delivery_fee
-    order["total"] = round(after_discount + tax + delivery_fee, 2)
+    order["total"] = _round_currency(after_discount + tax + delivery_fee)
     return order
 
 
@@ -515,13 +524,24 @@ def _apply_promotion(session_id, tool_input):
         return {"error": f"'{promotion_id}' is not a recognized active promotion"}
 
     order = get_session_order(session_id)
-    subtotal = sum(i["price"] * i["quantity"] for i in order["items"])
+
+    # Some promotions (e.g. happy-hour-20) only discount items from specific categories —
+    # a percentage discount must be based on just those items' subtotal, not the whole cart.
+    applies_to_categories = promo.get("appliesToCategories")
+    if applies_to_categories:
+        with open(MENU_PATH) as f:
+            menu_categories = json.load(f)
+        item_category = {item["name"]: cat["category"] for cat in menu_categories for item in cat["items"]}
+        discount_base_items = [i for i in order["items"] if item_category.get(i["name"]) in applies_to_categories]
+    else:
+        discount_base_items = order["items"]
+    discount_base = sum(i["price"] * i["quantity"] for i in discount_base_items)
 
     discount = promo["discount"]
     if discount["type"] == "percentage":
-        discount_amount = round(subtotal * discount["value"] / 100, 2)
+        discount_amount = _round_currency(discount_base * discount["value"] / 100)
     else:
-        discount_amount = round(discount["value"], 2)
+        discount_amount = _round_currency(discount["value"])
 
     order["discount"] = {"id": promo["id"], "name": promo["name"], "amount": discount_amount}
     _recompute_total(order)
