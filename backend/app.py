@@ -44,6 +44,10 @@ def _new_order_state():
         "total": 0.0,
         "confirmed": False,
         "status": "in_progress",
+        # True only immediately after getOrderSummary is called, so confirmOrder can verify
+        # the customer confirmed the summary actually shown to them. Any tool that changes
+        # the order invalidates this, forcing a fresh summary before confirming again.
+        "summary_shown": False,
     }
 
 
@@ -280,6 +284,33 @@ GET_ORDER_SUMMARY_TOOL = {
     },
 }
 
+CONFIRM_ORDER_TOOL = {
+    "name": "confirmOrder",
+    "description": (
+        "Save and finalize the order — the only way an order is ever saved. Call this only "
+        "after calling getOrderSummary, reading that exact summary to the customer, and "
+        "receiving a clear, unambiguous 'yes' to finalize it. Pass confirmed: true for a "
+        "clear affirmative (e.g. 'yes', 'confirm', 'that's correct, place it'). If the reply "
+        "is unclear, ambiguous, non-committal, or not a direct answer (e.g. 'ok', 'sure', "
+        "'maybe', 'I guess', a question, or anything that doesn't clearly affirm), do NOT "
+        "call this tool — ask a direct yes/no question instead. Pass confirmed: false only "
+        "if the customer explicitly declines or cancels. The tool itself refuses to save if "
+        "the order is empty or if anything changed since the summary was last shown, so "
+        "always re-call getOrderSummary and re-confirm after any change."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "confirmed": {
+                "type": "boolean",
+                "description": "True only for a clear, explicit 'yes' to finalize; false only for an explicit decline. Never guess this from an ambiguous reply.",
+            },
+        },
+        "required": ["confirmed"],
+        "additionalProperties": False,
+    },
+}
+
 
 def _get_active_menu():
     with open(MENU_PATH) as f:
@@ -342,6 +373,7 @@ def _add_item_to_cart(session_id, tool_input):
         }
     )
     _recompute_total(order)
+    order["summary_shown"] = False
 
     return {"added": {"name": name, "quantity": quantity, "option": option}, "cart": order}
 
@@ -382,6 +414,7 @@ def _modify_item(session_id, tool_input):
         cart_item["quantity"] = quantity
 
     _recompute_total(order)
+    order["summary_shown"] = False
 
     return {"modified": cart_item, "cart": order}
 
@@ -410,6 +443,7 @@ def _remove_item(session_id, tool_input):
         remaining_quantity = cart_item["quantity"]
 
     _recompute_total(order)
+    order["summary_shown"] = False
 
     return {
         "removed": {"name": name, "quantity": removed_quantity},
@@ -487,6 +521,7 @@ def _apply_promotion(session_id, tool_input):
 
     order["discount"] = {"id": promo["id"], "name": promo["name"], "amount": discount_amount}
     _recompute_total(order)
+    order["summary_shown"] = False
 
     return {"applied": order["discount"], "cart": order}
 
@@ -494,6 +529,7 @@ def _apply_promotion(session_id, tool_input):
 def _set_pickup_details(session_id, tool_input):
     order = get_session_order(session_id)
     order["order_type"] = "pickup"
+    order["summary_shown"] = False
     _recompute_total(order)
 
     customer_name = tool_input.get("customerName")
@@ -523,6 +559,7 @@ def _set_pickup_details(session_id, tool_input):
 def _set_delivery_details(session_id, tool_input):
     order = get_session_order(session_id)
     order["order_type"] = "delivery"
+    order["summary_shown"] = False
     _recompute_total(order)
 
     customer_name = tool_input.get("customerName")
@@ -620,6 +657,8 @@ def _get_order_summary(session_id):
 
     promotions = [order["discount"]] if order["discount"] else []
 
+    order["summary_shown"] = True
+
     return {
         "items": items,
         "fulfillment": fulfillment,
@@ -631,6 +670,64 @@ def _get_order_summary(session_id):
             "delivery_fee": order["delivery_fee"],
             "total": order["total"],
         },
+    }
+
+
+def _save_order(order):
+    order_record = {
+        "id": str(uuid.uuid4()),
+        "items": [
+            {"name": i["name"], "quantity": i["quantity"], "options": i["options"], "price": i["price"]}
+            for i in order["items"]
+        ],
+        "order_type": order["order_type"],
+        "total": order["total"],
+    }
+
+    orders = []
+    if os.path.exists(ORDERS_PATH):
+        with open(ORDERS_PATH) as f:
+            orders = json.load(f)
+    orders.append(order_record)
+    with open(ORDERS_PATH, "w") as f:
+        json.dump(orders, f, indent=2)
+
+    return order_record
+
+
+def _confirm_order(session_id, tool_input):
+    confirmed = tool_input.get("confirmed")
+    if not isinstance(confirmed, bool):
+        return {"error": "confirmed must be a boolean"}
+
+    order = get_session_order(session_id)
+
+    if order["status"] == "confirmed":
+        return {"error": "already_confirmed", "message": "This order was already confirmed and saved."}
+    if not order["items"]:
+        return {"error": "empty_order", "message": "Cannot confirm an order with no items."}
+
+    if not confirmed:
+        return {"confirmed": False, "status": order["status"]}
+
+    # The gate: only a summary the customer actually just reviewed can be confirmed. Any
+    # order-changing tool call since then clears this, so a stale summary can't be finalized.
+    if not order["summary_shown"]:
+        return {
+            "error": "summary_not_reviewed",
+            "message": "Call getOrderSummary and present it to the customer before confirming.",
+        }
+
+    _recompute_total(order)
+    order_record = _save_order(order)
+    order["confirmed"] = True
+    order["status"] = "confirmed"
+
+    return {
+        "confirmed": True,
+        "order_id": order_record["id"],
+        "total": order_record["total"],
+        "status": order["status"],
     }
 
 
@@ -657,6 +754,8 @@ def _run_tool(name, tool_input, session_id):
         return _get_order_total(session_id)
     if name == "getOrderSummary":
         return _get_order_summary(session_id)
+    if name == "confirmOrder":
+        return _confirm_order(session_id, tool_input)
     return {"error": f"unknown tool: {name}"}
 
 
@@ -764,6 +863,7 @@ def chat():
         SET_DELIVERY_DETAILS_TOOL,
         GET_ORDER_TOTAL_TOOL,
         GET_ORDER_SUMMARY_TOOL,
+        CONFIRM_ORDER_TOOL,
     ]
 
     try:
