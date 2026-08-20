@@ -794,14 +794,12 @@ def health():
 
 @app.get("/menu")
 def menu():
-    with open(MENU_PATH) as f:
-        return jsonify(json.load(f))
+    return jsonify(_get_active_menu())
 
 
 def _menu_prices():
-    with open(MENU_PATH) as f:
-        categories = json.load(f)
-    return {item["name"]: item["price"] for cat in categories for item in cat["items"]}
+    active = _get_active_menu()
+    return {item["name"]: item["price"] for cat in active for item in cat["items"]}
 
 
 @app.post("/order")
