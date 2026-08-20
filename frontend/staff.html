@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cafe Aroma — Staff Dashboard</title>
+<style>
+  :root {
+    --brown-900: #3b2418;
+    --brown-700: #5c3a26;
+    --cream-100: #fdf6ec;
+    --cream-200: #f5e9d8;
+    --accent: #c96f34;
+    --text: #2c1c12;
+    --white: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    background: var(--cream-100);
+  }
+  h1 {
+    margin: 0 0 4px;
+    color: var(--brown-900);
+    font-size: 22px;
+  }
+  .sub {
+    margin: 0 0 20px;
+    color: var(--brown-700);
+    font-size: 14px;
+  }
+  #refresh {
+    background: var(--accent);
+    color: var(--white);
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-bottom: 20px;
+  }
+  #refresh:hover { background: var(--brown-700); }
+  #empty {
+    color: var(--brown-700);
+  }
+  .order-grid {
+    display: grid;
+    gap: 14px;
+  }
+  .order-card {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 3px 10px rgba(59, 36, 24, 0.08);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: start;
+  }
+  .order-id {
+    font-weight: 700;
+    color: var(--brown-900);
+  }
+  .order-meta {
+    font-size: 13px;
+    color: var(--brown-700);
+    margin-top: 2px;
+  }
+  .order-items {
+    margin: 8px 0 0;
+    font-size: 14px;
+  }
+  .order-total {
+    margin-top: 8px;
+    font-weight: 600;
+  }
+  .status-col {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+  .badge-NEW { background: #fde2c8; color: #8a4b12; }
+  .badge-PREPARING { background: #fff3b0; color: #7a5d00; }
+  .badge-READY { background: #cdeccb; color: #1f6b28; }
+  .badge-COMPLETED { background: var(--cream-200); color: var(--brown-700); }
+  .advance-btn {
+    background: var(--brown-900);
+    color: var(--white);
+    border: none;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .advance-btn:hover { background: var(--brown-700); }
+</style>
+</head>
+<body>
+  <h1>Staff Dashboard</h1>
+  <p class="sub">Orders from data/orders.json</p>
+  <button id="refresh" type="button">Refresh</button>
+  <p id="empty" hidden>No orders yet.</p>
+  <div id="order-grid" class="order-grid"></div>
+
+  <script>
+    const API_BASE = "http://localhost:3000";
+    const NEXT_STATUS = { NEW: "PREPARING", PREPARING: "READY", READY: "COMPLETED" };
+
+    const grid = document.getElementById("order-grid");
+    const emptyMsg = document.getElementById("empty");
+    const refreshBtn = document.getElementById("refresh");
+
+    function fulfillmentText(order) {
+      const f = order.fulfillment;
+      if (!f) return "—";
+      if (f.type === "pickup") {
+        return `Pickup — ${f.customer_name || "?"}${f.pickup_time ? ` @ ${f.pickup_time}` : ""}`;
+      }
+      if (f.type === "delivery") {
+        const addr = [f.address, f.apartment].filter(Boolean).join(", ");
+        return `Delivery — ${f.customer_name || "?"} · ${f.phone || "?"} · ${addr || "?"}`;
+      }
+      return f.type || "—";
+    }
+
+    function itemsText(order) {
+      return (order.items || [])
+        .map((i) => `${i.name}${i.options && i.options.length ? ` (${i.options.join(", ")})` : ""} x${i.quantity}`)
+        .join(", ");
+    }
+
+    function orderTotal(order) {
+      const total = order.pricing ? order.pricing.total : order.total;
+      return typeof total === "number" ? `$${total.toFixed(2)}` : "—";
+    }
+
+    async function advanceStatus(orderId, nextStatus) {
+      try {
+        const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: nextStatus }),
+        });
+        if (!res.ok) throw new Error("status update failed");
+        await loadOrders();
+      } catch (err) {
+        alert("Couldn't update order status. Please try again.");
+      }
+    }
+
+    function renderOrders(orders) {
+      grid.innerHTML = "";
+      emptyMsg.hidden = orders.length > 0;
+
+      orders.forEach((order) => {
+        const status = order.status || "NEW";
+        const card = document.createElement("div");
+        card.className = "order-card";
+
+        const info = document.createElement("div");
+        info.innerHTML = `
+          <div class="order-id">#${(order.id || "").slice(0, 8)}</div>
+          <div class="order-meta">${fulfillmentText(order)}</div>
+          <div class="order-items">${itemsText(order) || "—"}</div>
+          <div class="order-total">${orderTotal(order)}</div>
+        `;
+
+        const statusCol = document.createElement("div");
+        statusCol.className = "status-col";
+
+        const badge = document.createElement("span");
+        badge.className = `badge badge-${status}`;
+        badge.textContent = status;
+        statusCol.appendChild(badge);
+
+        const next = NEXT_STATUS[status];
+        if (next) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "advance-btn";
+          btn.textContent = `Move to ${next}`;
+          btn.addEventListener("click", () => advanceStatus(order.id, next));
+          statusCol.appendChild(btn);
+        }
+
+        card.appendChild(info);
+        card.appendChild(statusCol);
+        grid.appendChild(card);
+      });
+    }
+
+    async function loadOrders() {
+      try {
+        const res = await fetch(`${API_BASE}/orders`);
+        if (!res.ok) throw new Error("orders request failed");
+        const orders = await res.json();
+        renderOrders(orders);
+      } catch (err) {
+        emptyMsg.hidden = false;
+        emptyMsg.textContent = "Couldn't load orders right now.";
+      }
+    }
+
+    refreshBtn.addEventListener("click", loadOrders);
+    loadOrders();
+  </script>
+</body>
+</html>

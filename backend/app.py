@@ -25,6 +25,9 @@ CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "system-prompt.md")
 TAX_RATE = 0.08
 DELIVERY_FEE = 3.00
 
+# The staff dashboard's fixed, forward-only fulfillment pipeline.
+ORDER_STATUSES = ["NEW", "PREPARING", "READY", "COMPLETED"]
+
 # In-memory session order state. Not persisted, not a database — resets on restart.
 # Each session's state: items (each with quantity/options), orderType, customer details,
 # discount, total, confirmed, and status.
@@ -827,6 +830,33 @@ def list_orders():
         return jsonify([])
     with open(ORDERS_PATH) as f:
         return jsonify(json.load(f))
+
+
+@app.post("/orders/<order_id>/status")
+def update_order_status(order_id):
+    data = request.get_json(silent=True) or {}
+    new_status = data.get("status")
+    if new_status not in ORDER_STATUSES:
+        return jsonify(error=f"status must be one of {ORDER_STATUSES}"), 400
+
+    if not os.path.exists(ORDERS_PATH):
+        return jsonify(error="order not found"), 404
+    with open(ORDERS_PATH) as f:
+        orders = json.load(f)
+
+    order = next((o for o in orders if o.get("id") == order_id), None)
+    if order is None:
+        return jsonify(error="order not found"), 404
+
+    current_status = order.get("status", "NEW")
+    if ORDER_STATUSES.index(new_status) != ORDER_STATUSES.index(current_status) + 1:
+        return jsonify(error=f"cannot move from {current_status} to {new_status}"), 400
+
+    order["status"] = new_status
+    with open(ORDERS_PATH, "w") as f:
+        json.dump(orders, f, indent=2)
+
+    return jsonify(order)
 
 
 @app.post("/chat")
