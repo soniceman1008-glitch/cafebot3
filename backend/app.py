@@ -15,6 +15,11 @@ anthropic_client = anthropic.Anthropic()
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 MENU_PATH = os.path.join(DATA_DIR, "menu.json")
+
+# Orders are persisted by reading/writing this JSON file directly. This is for
+# development/demo purposes only — Vercel's serverless functions run on an ephemeral,
+# read-only-outside-/tmp filesystem, so writes here are not guaranteed to persist in
+# production. A real deployment needs a proper database.
 ORDERS_PATH = os.path.join(DATA_DIR, "orders.json")
 PROMOTIONS_PATH = os.path.join(DATA_DIR, "promotions.json")
 
