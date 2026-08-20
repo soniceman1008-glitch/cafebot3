@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import uuid
@@ -634,12 +635,12 @@ def _get_order_total(session_id):
     }
 
 
-def _get_order_summary(session_id):
-    order = get_session_order(session_id)
-    _recompute_total(order)
-
+def _build_order_snapshot(order):
+    """The structured shape of an order — shared by the pre-checkout summary shown to the
+    customer and the record actually saved, so what gets saved is always exactly what was
+    reviewed and confirmed."""
     items = [
-        {"name": i["name"], "quantity": i["quantity"], "options": i["options"]}
+        {"name": i["name"], "quantity": i["quantity"], "options": i["options"], "price": i["price"]}
         for i in order["items"]
     ]
 
@@ -657,8 +658,6 @@ def _get_order_summary(session_id):
 
     promotions = [order["discount"]] if order["discount"] else []
 
-    order["summary_shown"] = True
-
     return {
         "items": items,
         "fulfillment": fulfillment,
@@ -673,15 +672,20 @@ def _get_order_summary(session_id):
     }
 
 
+def _get_order_summary(session_id):
+    order = get_session_order(session_id)
+    _recompute_total(order)
+    snapshot = _build_order_snapshot(order)
+    order["summary_shown"] = True
+    return snapshot
+
+
 def _save_order(order):
     order_record = {
         "id": str(uuid.uuid4()),
-        "items": [
-            {"name": i["name"], "quantity": i["quantity"], "options": i["options"], "price": i["price"]}
-            for i in order["items"]
-        ],
-        "order_type": order["order_type"],
-        "total": order["total"],
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "status": "NEW",
+        **_build_order_snapshot(order),
     }
 
     orders = []
@@ -726,8 +730,9 @@ def _confirm_order(session_id, tool_input):
     return {
         "confirmed": True,
         "order_id": order_record["id"],
-        "total": order_record["total"],
-        "status": order["status"],
+        "timestamp": order_record["timestamp"],
+        "total": order_record["pricing"]["total"],
+        "status": order_record["status"],
     }
 
 
