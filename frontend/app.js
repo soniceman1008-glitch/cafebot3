@@ -99,8 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  async function placeOrder() {
-    if (order.length === 0) return;
+  async function submitOrder() {
     try {
       const res = await fetch(`${API_BASE}/order`, {
         method: "POST",
@@ -121,6 +120,47 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       appendMessage("Sorry, I couldn't place your order right now.", "bot");
     }
+  }
+
+  function appendConfirmPrompt() {
+    const totalItems = order.reduce((sum, o) => sum + o.quantity, 0);
+    const total = order.reduce((sum, o) => sum + o.price * o.quantity, 0);
+    const itemList = order.map((o) => `${o.name} x${o.quantity}`).join(", ");
+    appendMessage(
+      `Please confirm: ${itemList} — ${totalItems} item${totalItems === 1 ? "" : "s"}, total $${total.toFixed(2)}. Place this order?`,
+      "bot"
+    );
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "chat-msg bot";
+
+    const yesBtn = document.createElement("button");
+    yesBtn.type = "button";
+    yesBtn.className = "chat-quick-btn";
+    yesBtn.textContent = "Yes, place order";
+    yesBtn.addEventListener("click", () => {
+      wrapper.remove();
+      submitOrder();
+    });
+
+    const noBtn = document.createElement("button");
+    noBtn.type = "button";
+    noBtn.className = "chat-quick-btn";
+    noBtn.textContent = "Cancel";
+    noBtn.addEventListener("click", () => {
+      wrapper.remove();
+      appendMessage("Order not placed. Let me know if you'd like to change anything.", "bot");
+    });
+
+    wrapper.appendChild(yesBtn);
+    wrapper.appendChild(noBtn);
+    log.appendChild(wrapper);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function placeOrder() {
+    if (order.length === 0) return;
+    appendConfirmPrompt();
   }
 
   placeOrderBtn.addEventListener("click", () => placeOrder());

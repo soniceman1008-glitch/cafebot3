@@ -832,6 +832,8 @@ def place_order():
 
     order_record = {
         "id": str(uuid.uuid4()),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "status": "NEW",
         "items": order_items,
         "total": round(total, 2),
     }
