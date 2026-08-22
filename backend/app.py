@@ -1,17 +1,31 @@
 import datetime
+import fcntl
+import hmac
 import json
 import os
+import tempfile
+import threading
+import time
 import uuid
+from collections import defaultdict, deque
+from contextlib import contextmanager
 from decimal import Decimal, ROUND_HALF_UP
 
 import anthropic
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
+from werkzeug.exceptions import HTTPException
 
 load_dotenv()
 
 app = Flask(__name__)
 anthropic_client = anthropic.Anthropic()
+
+# Debug mode must never be on by default. It's only enabled by explicitly setting
+# FLASK_DEBUG=true/1 in the environment (local development) — never hardcode it on,
+# since Flask's debug mode serves the interactive Werkzeug debugger (full stack traces,
+# source code, and a REPL) directly to any client that triggers an unhandled exception.
+DEBUG = os.environ.get("FLASK_DEBUG", "false").strip().lower() in ("1", "true", "yes")
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 MENU_PATH = os.path.join(DATA_DIR, "menu.json")
@@ -31,6 +45,11 @@ CHAT_SYSTEM_PATH = os.path.join(PROMPTS_DIR, "system-prompt.md")
 TAX_RATE = 0.08
 DELIVERY_FEE = 3.00
 
+# A reasonable ceiling for a single line item on a café order — guards against absurd
+# quantities (e.g. accidental or automated submission of a nine-digit quantity) without
+# affecting any realistic customer order.
+MAX_ITEM_QUANTITY = 100
+
 # The staff dashboard's fixed, forward-only fulfillment pipeline.
 ORDER_STATUSES = ["NEW", "PREPARING", "READY", "COMPLETED"]
 
@@ -41,13 +60,72 @@ STAFF_API_KEY = os.environ.get("STAFF_API_KEY")
 
 PUBLIC_ORDER_FIELDS = {"id", "items", "total", "status"}
 
+# The frontend is served from its own origin (a separate static file server/host from
+# the backend), so genuine cross-origin requests are expected — but only from the
+# frontend's own known origin(s), never from an arbitrary website. Configurable so a
+# real deployment can set its actual frontend origin(s) without a code change.
+DEFAULT_ALLOWED_ORIGINS = "http://localhost:8000,http://127.0.0.1:8000,http://localhost:8500,http://127.0.0.1:8500"
+ALLOWED_ORIGINS = {
+    o.strip() for o in os.environ.get("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS).split(",") if o.strip()
+}
+
+# Lightweight in-memory rate limiting (no external dependency) — a fixed time window per
+# bucket key. Not shared across multiple processes/workers, which is an acceptable
+# limitation for this app's scale; it still stops a single client from hammering an
+# endpoint with unlimited automated attempts.
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_ORDER_PER_MINUTE = int(os.environ.get("RATE_LIMIT_ORDER_PER_MINUTE", 30))
+RATE_LIMIT_CHAT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_CHAT_PER_MINUTE", 30))
+RATE_LIMIT_STAFF_PER_MINUTE = int(os.environ.get("RATE_LIMIT_STAFF_PER_MINUTE", 30))
+
+_rate_lock = threading.Lock()
+_rate_buckets = defaultdict(deque)
+
+
+def _rate_limited(bucket_key, limit):
+    now = time.time()
+    with _rate_lock:
+        bucket = _rate_buckets[bucket_key]
+        while bucket and now - bucket[0] > RATE_LIMIT_WINDOW_SECONDS:
+            bucket.popleft()
+        if len(bucket) >= limit:
+            return True
+        bucket.append(now)
+        return False
+
 
 def _is_staff_request():
-    return bool(STAFF_API_KEY) and request.headers.get("X-Staff-Key") == STAFF_API_KEY
+    if not STAFF_API_KEY:
+        return False
+    provided = request.headers.get("X-Staff-Key")
+    if not isinstance(provided, str):
+        return False
+    # Constant-time comparison — a plain == leaks how many leading characters matched
+    # via response timing, which a patient attacker could use to recover the key
+    # byte-by-byte.
+    return hmac.compare_digest(provided, STAFF_API_KEY)
 
 
 def _redact_order(order):
     return {k: v for k, v in order.items() if k in PUBLIC_ORDER_FIELDS}
+
+
+def _valid_quantity(quantity):
+    return isinstance(quantity, int) and not isinstance(quantity, bool) and 1 <= quantity <= MAX_ITEM_QUANTITY
+
+
+def _get_json_object():
+    """Parse the request body as JSON, guaranteeing a dict is returned to callers so
+    every route can safely call .get() on it. A missing/empty body is treated the same
+    as an empty object (unchanged prior behavior); any JSON that parses to something
+    other than an object (an array, string, number, or null literal) is reported back
+    as a sentinel (None) rather than ever letting a non-dict reach a caller's .get()."""
+    data = request.get_json(silent=True)
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        return None
+    return data
 
 # In-memory session order state. Not persisted, not a database — resets on restart.
 # Each session's state: items (each with quantity/options), orderType, customer details,
@@ -345,6 +423,78 @@ CONFIRM_ORDER_TOOL = {
 }
 
 
+ORDERS_LOCK_PATH = ORDERS_PATH + ".lock"
+
+
+@contextmanager
+def _orders_file_lock():
+    """Serializes every read-modify-write against data/orders.json across separate
+    processes (not just threads within this one interpreter) using a POSIX advisory
+    file lock, so two concurrent requests can never interleave their reads/writes.
+    This is what actually fixes the original race — JS-side double-click protection
+    only ever prevented one browser tab from firing two requests; it did nothing for
+    two genuinely concurrent requests (e.g. two different customers, or two tabs)."""
+    lock_file = open(ORDERS_LOCK_PATH, "a")
+    try:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+        lock_file.close()
+
+
+def _read_orders_unlocked():
+    """Must only be called while holding _orders_file_lock(). Treats a missing file as
+    empty, and — since a write is always a full atomic replace, never an in-place
+    edit — a corrupt/unreadable file can only be leftover damage from before this
+    locking existed, not something a properly-serialized writer can produce; recover
+    from it the same way as a missing file rather than crashing every future request."""
+    if not os.path.exists(ORDERS_PATH):
+        return []
+    try:
+        with open(ORDERS_PATH) as f:
+            content = f.read()
+    except OSError:
+        return []
+    if not content.strip():
+        return []
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        app.logger.error("data/orders.json contained invalid JSON; treating as empty")
+        return []
+
+
+def _write_orders_atomic(orders):
+    """Must only be called while holding _orders_file_lock(). Writes to a temp file in
+    the same directory, then os.replace()s it over the real path — an atomic rename on
+    POSIX, so a concurrent reader/writer only ever sees either the complete old file or
+    the complete new one, never a partially-written one."""
+    fd, tmp_path = tempfile.mkstemp(dir=DATA_DIR, prefix=".orders_tmp_")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(orders, f, indent=2)
+        os.replace(tmp_path, ORDERS_PATH)
+    except BaseException:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def _append_order(order_record):
+    with _orders_file_lock():
+        orders = _read_orders_unlocked()
+        orders.append(order_record)
+        _write_orders_atomic(orders)
+
+
+def _read_orders():
+    with _orders_file_lock():
+        return _read_orders_unlocked()
+
+
 def _get_active_menu():
     with open(MENU_PATH) as f:
         categories = json.load(f)
@@ -373,8 +523,8 @@ def _add_item_to_cart(session_id, tool_input):
 
     if not isinstance(name, str) or not name.strip():
         return {"error": "name is required"}
-    if not isinstance(quantity, int) or quantity < 1:
-        return {"error": "quantity must be a positive integer"}
+    if not _valid_quantity(quantity):
+        return {"error": f"quantity must be a positive integer no greater than {MAX_ITEM_QUANTITY}"}
 
     item = _find_menu_item(name)
     if item is None:
@@ -420,8 +570,8 @@ def _modify_item(session_id, tool_input):
         return {"error": "name is required"}
     if quantity is None and option is None:
         return {"error": "quantity and/or option is required to modify the item"}
-    if quantity is not None and (not isinstance(quantity, int) or quantity < 1):
-        return {"error": "quantity must be a positive integer"}
+    if quantity is not None and not _valid_quantity(quantity):
+        return {"error": f"quantity must be a positive integer no greater than {MAX_ITEM_QUANTITY}"}
 
     order = get_session_order(session_id)
     cart_item = next((i for i in order["items"] if i["name"] == name), None)
@@ -458,8 +608,8 @@ def _remove_item(session_id, tool_input):
 
     if not isinstance(name, str) or not name.strip():
         return {"error": "name is required"}
-    if quantity is not None and (not isinstance(quantity, int) or quantity < 1):
-        return {"error": "quantity must be a positive integer"}
+    if quantity is not None and not _valid_quantity(quantity):
+        return {"error": f"quantity must be a positive integer no greater than {MAX_ITEM_QUANTITY}"}
 
     order = get_session_order(session_id)
     cart_item = next((i for i in order["items"] if i["name"] == name), None)
@@ -730,15 +880,7 @@ def _save_order(order):
         "status": "NEW",
         **_build_order_snapshot(order),
     }
-
-    orders = []
-    if os.path.exists(ORDERS_PATH):
-        with open(ORDERS_PATH) as f:
-            orders = json.load(f)
-    orders.append(order_record)
-    with open(ORDERS_PATH, "w") as f:
-        json.dump(orders, f, indent=2)
-
+    _append_order(order_record)
     return order_record
 
 
@@ -824,7 +966,12 @@ def _menu_prices():
 
 @app.post("/order")
 def place_order():
-    data = request.get_json(silent=True) or {}
+    if _rate_limited(f"order:{request.remote_addr}", RATE_LIMIT_ORDER_PER_MINUTE):
+        return jsonify(error="too many requests, please slow down"), 429
+
+    data = _get_json_object()
+    if data is None:
+        return jsonify(error="invalid request body"), 400
     items = data.get("items")
     if not isinstance(items, list) or not items:
         return jsonify(error="items is required"), 400
@@ -839,8 +986,10 @@ def place_order():
         quantity = entry.get("quantity", 1)
         if name not in prices:
             return jsonify(error=f"unknown menu item: {name}"), 400
-        if not isinstance(quantity, int) or quantity < 1:
-            return jsonify(error="quantity must be a positive integer"), 400
+        if not _valid_quantity(quantity):
+            return jsonify(error=f"quantity must be a positive integer no greater than {MAX_ITEM_QUANTITY}"), 400
+        # Price always comes from the trusted menu lookup above — any client-supplied
+        # "price"/"total" on the request is read nowhere and has no effect.
         price = prices[name]
         total += price * quantity
         order_items.append({"name": name, "quantity": quantity, "price": price})
@@ -852,24 +1001,19 @@ def place_order():
         "items": order_items,
         "total": round(total, 2),
     }
-
-    orders = []
-    if os.path.exists(ORDERS_PATH):
-        with open(ORDERS_PATH) as f:
-            orders = json.load(f)
-    orders.append(order_record)
-    with open(ORDERS_PATH, "w") as f:
-        json.dump(orders, f, indent=2)
+    _append_order(order_record)
 
     return jsonify(order_id=order_record["id"], items=order_items, total=order_record["total"])
 
 
 @app.get("/orders")
 def list_orders():
-    if not os.path.exists(ORDERS_PATH):
-        return jsonify([])
-    with open(ORDERS_PATH) as f:
-        orders = json.load(f)
+    if request.headers.get("X-Staff-Key") is not None and _rate_limited(
+        f"staffkey:{request.remote_addr}", RATE_LIMIT_STAFF_PER_MINUTE
+    ):
+        return jsonify(error="too many requests, please slow down"), 429
+
+    orders = _read_orders()
     if not _is_staff_request():
         orders = [_redact_order(o) for o in orders]
     return jsonify(orders)
@@ -877,37 +1021,45 @@ def list_orders():
 
 @app.post("/orders/<order_id>/status")
 def update_order_status(order_id):
+    if request.headers.get("X-Staff-Key") is not None and _rate_limited(
+        f"staffkey:{request.remote_addr}", RATE_LIMIT_STAFF_PER_MINUTE
+    ):
+        return jsonify(error="too many requests, please slow down"), 429
+
     if not _is_staff_request():
         return jsonify(error="unauthorized"), 401
 
-    data = request.get_json(silent=True) or {}
+    data = _get_json_object()
+    if data is None:
+        return jsonify(error="invalid request body"), 400
     new_status = data.get("status")
     if new_status not in ORDER_STATUSES:
         return jsonify(error=f"status must be one of {ORDER_STATUSES}"), 400
 
-    if not os.path.exists(ORDERS_PATH):
-        return jsonify(error="order not found"), 404
-    with open(ORDERS_PATH) as f:
-        orders = json.load(f)
+    with _orders_file_lock():
+        orders = _read_orders_unlocked()
+        order = next((o for o in orders if o.get("id") == order_id), None)
+        if order is None:
+            return jsonify(error="order not found"), 404
 
-    order = next((o for o in orders if o.get("id") == order_id), None)
-    if order is None:
-        return jsonify(error="order not found"), 404
+        current_status = order.get("status", "NEW")
+        if ORDER_STATUSES.index(new_status) != ORDER_STATUSES.index(current_status) + 1:
+            return jsonify(error=f"cannot move from {current_status} to {new_status}"), 400
 
-    current_status = order.get("status", "NEW")
-    if ORDER_STATUSES.index(new_status) != ORDER_STATUSES.index(current_status) + 1:
-        return jsonify(error=f"cannot move from {current_status} to {new_status}"), 400
-
-    order["status"] = new_status
-    with open(ORDERS_PATH, "w") as f:
-        json.dump(orders, f, indent=2)
+        order["status"] = new_status
+        _write_orders_atomic(orders)
 
     return jsonify(order)
 
 
 @app.post("/chat")
 def chat():
-    data = request.get_json(silent=True) or {}
+    if _rate_limited(f"chat:{request.remote_addr}", RATE_LIMIT_CHAT_PER_MINUTE):
+        return jsonify(error="too many requests, please slow down"), 429
+
+    data = _get_json_object()
+    if data is None:
+        return jsonify(error="invalid request body"), 400
     message = data.get("message")
     if not isinstance(message, str) or not message.strip():
         return jsonify(error="message is required"), 400
@@ -985,12 +1137,39 @@ def chat():
 
 
 @app.after_request
-def add_cors_headers(response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
+def add_security_headers(response):
+    # Reflect the request's Origin only if it's an explicitly allowed frontend origin —
+    # never a bare wildcard. A disallowed/absent Origin simply gets no CORS header at
+    # all, which is enough for browsers to block a cross-origin site's JS from reading
+    # the response (and, for POST with a JSON body, from ever getting past its own
+    # preflight in the first place).
+    origin = request.headers.get("Origin")
+    if origin in ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Staff-Key"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST"
+
+    # This backend only ever returns JSON (or a plain error), never renders HTML pages
+    # itself — these are safe defaults that add no risk of breaking the API responses,
+    # and cost nothing since there's no inline script/style to allow-list here.
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+    response.headers["Content-Security-Policy"] = "default-src 'none'"
     return response
 
 
+@app.errorhandler(Exception)
+def handle_unexpected_error(e):
+    # Let Flask's normal handling take care of standard HTTP errors (404, 405, etc.) —
+    # only an actually-unexpected exception should be caught and generalized here.
+    if isinstance(e, HTTPException):
+        return e
+    app.logger.exception("Unhandled exception while handling %s %s", request.method, request.path)
+    return jsonify(error="internal server error"), 500
+
+
 if __name__ == "__main__":
-    app.run(port=int(os.environ.get("PORT", 5000)), debug=True)
+    app.run(port=int(os.environ.get("PORT", 5000)), debug=DEBUG)

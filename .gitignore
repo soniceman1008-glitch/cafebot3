@@ -16,6 +16,7 @@ venv/
 
 # Runtime order data
 data/orders.json
+data/orders.json.lock
 
 # Gradle files
 .gradle/
