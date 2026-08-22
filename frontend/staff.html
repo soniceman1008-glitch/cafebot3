@@ -124,6 +124,19 @@
     const emptyMsg = document.getElementById("empty");
     const refreshBtn = document.getElementById("refresh");
 
+    function getStaffKey() {
+      let key = sessionStorage.getItem("cafebot_staff_key");
+      if (!key) {
+        key = window.prompt("Staff key:") || "";
+        sessionStorage.setItem("cafebot_staff_key", key);
+      }
+      return key;
+    }
+
+    function staffHeaders(extra) {
+      return Object.assign({ "X-Staff-Key": getStaffKey() }, extra || {});
+    }
+
     function fulfillmentText(order) {
       const f = order.fulfillment;
       if (!f) return "—";
@@ -152,7 +165,7 @@
       try {
         const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: staffHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ status: nextStatus }),
         });
         if (!res.ok) throw new Error("status update failed");
@@ -172,12 +185,27 @@
         card.className = "order-card";
 
         const info = document.createElement("div");
-        info.innerHTML = `
-          <div class="order-id">#${(order.id || "").slice(0, 8)}</div>
-          <div class="order-meta">${fulfillmentText(order)}</div>
-          <div class="order-items">${itemsText(order) || "—"}</div>
-          <div class="order-total">${orderTotal(order)}</div>
-        `;
+
+        const idLine = document.createElement("div");
+        idLine.className = "order-id";
+        idLine.textContent = `#${(order.id || "").slice(0, 8)}`;
+
+        const metaLine = document.createElement("div");
+        metaLine.className = "order-meta";
+        metaLine.textContent = fulfillmentText(order);
+
+        const itemsLine = document.createElement("div");
+        itemsLine.className = "order-items";
+        itemsLine.textContent = itemsText(order) || "—";
+
+        const totalLine = document.createElement("div");
+        totalLine.className = "order-total";
+        totalLine.textContent = orderTotal(order);
+
+        info.appendChild(idLine);
+        info.appendChild(metaLine);
+        info.appendChild(itemsLine);
+        info.appendChild(totalLine);
 
         const statusCol = document.createElement("div");
         statusCol.className = "status-col";
@@ -205,7 +233,7 @@
 
     async function loadOrders() {
       try {
-        const res = await fetch(`${API_BASE}/orders`);
+        const res = await fetch(`${API_BASE}/orders`, { headers: staffHeaders() });
         if (!res.ok) throw new Error("orders request failed");
         const orders = await res.json();
         renderOrders(orders);

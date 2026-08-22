@@ -34,6 +34,21 @@ DELIVERY_FEE = 3.00
 # The staff dashboard's fixed, forward-only fulfillment pipeline.
 ORDER_STATUSES = ["NEW", "PREPARING", "READY", "COMPLETED"]
 
+# Required to view full order records (with customer name/phone/address) or advance order
+# status. Requests without a matching X-Staff-Key header only ever see the redacted,
+# PII-free view of orders.json.
+STAFF_API_KEY = os.environ.get("STAFF_API_KEY")
+
+PUBLIC_ORDER_FIELDS = {"id", "items", "total", "status"}
+
+
+def _is_staff_request():
+    return bool(STAFF_API_KEY) and request.headers.get("X-Staff-Key") == STAFF_API_KEY
+
+
+def _redact_order(order):
+    return {k: v for k, v in order.items() if k in PUBLIC_ORDER_FIELDS}
+
 # In-memory session order state. Not persisted, not a database — resets on restart.
 # Each session's state: items (each with quantity/options), orderType, customer details,
 # discount, total, confirmed, and status.
@@ -854,11 +869,17 @@ def list_orders():
     if not os.path.exists(ORDERS_PATH):
         return jsonify([])
     with open(ORDERS_PATH) as f:
-        return jsonify(json.load(f))
+        orders = json.load(f)
+    if not _is_staff_request():
+        orders = [_redact_order(o) for o in orders]
+    return jsonify(orders)
 
 
 @app.post("/orders/<order_id>/status")
 def update_order_status(order_id):
+    if not _is_staff_request():
+        return jsonify(error="unauthorized"), 401
+
     data = request.get_json(silent=True) or {}
     new_status = data.get("status")
     if new_status not in ORDER_STATUSES:
@@ -966,7 +987,7 @@ def chat():
 @app.after_request
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Staff-Key"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST"
     return response
 

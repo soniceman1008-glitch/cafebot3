@@ -2,7 +2,17 @@
 
 const API_BASE = "http://localhost:3000";
 
+function getSessionId() {
+  let id = sessionStorage.getItem("cafebot_session_id");
+  if (!id) {
+    id = crypto.randomUUID();
+    sessionStorage.setItem("cafebot_session_id", id);
+  }
+  return id;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  const sessionId = getSessionId();
   const toggle = document.getElementById("chat-toggle");
   const closeBtn = document.getElementById("chat-close");
   const chatWindow = document.getElementById("chat-window");
@@ -227,7 +237,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, session_id: sessionId }),
       });
       if (!res.ok) throw new Error("chat request failed");
       const data = await res.json();

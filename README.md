@@ -20,7 +20,10 @@ A café web app.
    cp .env.example .env
    ```
    Set `PORT=3000` in `.env` — `frontend/app.js` is hardcoded to call the
-   backend at `http://localhost:3000`.
+   backend at `http://localhost:3000`. Also set `STAFF_API_KEY` to a random
+   string — the staff dashboard (`frontend/staff.html`) needs it to view
+   full order details and update order status; it'll prompt for the key
+   the first time you open it.
 
 ## Running locally
 
